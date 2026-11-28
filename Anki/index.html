@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3efe5">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Anki</title>
+  <link rel="icon" href="/icon.svg">
+  <link rel="stylesheet" href="./study.css">
+  <script type="module" src="./study.js"></script>
+</head>
+<body>
+  <a class="skip" href="#workspace">Skip to study</a>
+  <header class="masthead">
+    <div class="mast-inner">
+      <div class="brand-group">
+        <a class="brand" href="/"><img src="/icon.svg" width="34" height="34" alt="">Philosophy of Intelligence</a>
+        <a class="current-page" href="./" aria-current="page">Anki</a>
+      </div>
+      <a class="download" href="./clinical-reasoning.apkg" download>
+        <span class="download-icon" aria-hidden="true">↓</span> Download deck
+      </a>
+    </div>
+  </header>
+  <main>
+    <section class="intro" aria-labelledby="deck-heading">
+      <div>
+        <h1 id="deck-heading">Clinical reasoning</h1>
+        <p>80 reasoning cards <span aria-hidden="true">·</span> 8 families <span aria-hidden="true">·</span> 800 Socratic questions</p>
+      </div>
+      <img class="engraving" src="/assets/engraved-eye.webp" alt="" width="218" height="105">
+    </section>
+    <section id="workspace" tabindex="-1" aria-label="Flashcard workspace">
+      <div class="toolbar">
+        <nav class="modes" aria-label="Deck view">
+          <button id="study-tab" class="mode selected" aria-pressed="true">Study</button>
+          <button id="browse-tab" class="mode" aria-pressed="false">Browse cards</button>
+        </nav>
+        <div class="filter">
+          <label for="family">Family</label>
+          <select id="family"><option value="">All families</option></select>
+        </div>
+      </div>
+      <noscript>Enable JavaScript to study here, or use Download deck to open the cards in Anki.</noscript>
+      <p id="notice" role="status" hidden></p>
+      <div id="study-pane" class="layout">
+        <article class="card" id="card" aria-label="Study card"><p class="loading">Loading cards…</p></article>
+        <aside aria-label="Review progress" class="summary">
+          <h2>Deck progress</h2>
+          <div class="progress-readout"><span id="seen-total">0 / 80</span><span>cards seen</span></div>
+          <progress id="progress" value="0" max="80" aria-label="Cards seen"></progress>
+          <dl class="counts">
+            <div><dt>New</dt><dd id="count-new">—</dd></div>
+            <div><dt>Due for review</dt><dd id="count-due">—</dd></div>
+          </dl>
+          <p class="device-note">Review dates are saved in this browser.</p>
+        </aside>
+      </div>
+      <section id="browse-pane" hidden aria-labelledby="browse-heading">
+        <div class="browse-head"><h2 id="browse-heading">Browse cards</h2><label class="search-label">Find a reasoning type<input id="search" type="search" placeholder="Search by name" autocomplete="off"></label></div>
+        <p id="result-count" role="status"></p>
+        <div id="results"></div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,2402 @@
+[
+  {
+    "id": 1,
+    "name": "Differential diagnosis",
+    "definition": "Construct and revise a set of plausible conditions that could account for a clinical presentation.",
+    "medicine": "A presenting problem can have several explanations. Comparing them directs attention to findings that change the ranking and possibilities whose consequences make them important.",
+    "benefits": [
+      "Separate the likeliest explanation from a less likely one with urgent implications.",
+      "Choose a question on which two contenders predict different answers.",
+      "Tell a colleague which possibility is still open and why."
+    ],
+    "reasons": [
+      "Common presentations can conceal atypical disease.",
+      "A long list is easy to make but hard to prioritise.",
+      "Patients can have two simultaneous problems.",
+      "Early negative findings can acquire new meaning as illness evolves.",
+      "Explaining why the ranking changed makes the next review more informative."
+    ],
+    "questions": [
+      "Which three explanations fit the timing as well as the symptoms?",
+      "Which candidate would you expect to encounter most often in this setting before hearing the history?",
+      "Which single feature gives the runner-up an advantage over your first choice?",
+      "What finding would be surprising under every explanation on your list?",
+      "Could two processes together account for the one feature that refuses to fit?",
+      "Which apparent negative was actually sought, at the right time, by a reliable method?",
+      "Which uncommon possibility would change the urgency of assessment?",
+      "What question has a different expected answer under each of your two leading candidates?",
+      "How would your ranking change if the first symptom began a week earlier than recorded?",
+      "What future observation should prompt the next clinician to reopen a possibility you have set aside?"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Abductive reasoning",
+    "definition": "Infer a plausible explanation from incomplete observations by comparing how well different accounts explain them.",
+    "medicine": "Clinical information arrives in fragments. A provisional account gives the doctor something specific to investigate and can be replaced as a better account emerges.",
+    "benefits": [
+      "Explain a puzzling cluster before all results are available.",
+      "Recognise when a documentation error might explain an apparent clinical inconsistency.",
+      "State the most vulnerable assumption behind a working explanation."
+    ],
+    "reasons": [
+      "The most memorable story can win attention too easily.",
+      "An elegant single cause may conceal coincidence.",
+      "Apparently numerous clues sometimes have a single source.",
+      "Rare findings can discriminate more sharply than shared ones.",
+      "A productive explanation yields a new prediction someone can check."
+    ],
+    "questions": [
+      "What could make these apparently unrelated observations unsurprising together?",
+      "Which clue did your favourite story actually predict before you knew it?",
+      "What independent alternative would a colleague unfamiliar with your first impression propose?",
+      "How many extra assumptions does each account need to explain the outlier?",
+      "If the striking detail were absent, which account would you favour?",
+      "Could the behaviour of the measurement process itself explain the pattern?",
+      "Which two clues appear independent only because the same observation was recorded twice?",
+      "What finding, still unobserved, follows most naturally from your account?",
+      "When would two common events be more plausible than a single unusual cause?",
+      "What makes your explanation preferable, and how weak is the weakest link in that preference?"
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Eliminative reasoning",
+    "definition": "Narrow a defined set of possibilities by identifying a requirement that a candidate demonstrably fails.",
+    "medicine": "Excluding a possibility can focus an investigation, but the strength of an exclusion depends on the reliability, timing and meaning of the contradicting evidence.",
+    "benefits": [
+      "Distinguish an impossible timeline from an unlikely one.",
+      "Check whether an exclusion criterion actually applies to this patient.",
+      "Document what would justify restoring a discarded possibility."
+    ],
+    "reasons": [
+      "Absence of documentation can masquerade as absence of a finding.",
+      "A negative result carries different weight at different stages.",
+      "One faulty premise can remove the correct candidate.",
+      "An incomplete original list leaves a misleading last survivor.",
+      "Explicit grounds for exclusion make decisions reversible as evidence changes."
+    ],
+    "questions": [
+      "Which feature must be present for this explanation to be possible?",
+      "Has that feature been shown to be absent, or has nobody looked for it?",
+      "Could the timing of assessment conceal what you expected to find?",
+      "What exception would allow the apparently excluded explanation to survive?",
+      "Does this result rule out the broad condition or only one subtype?",
+      "If one record has the wrong timestamp, which exclusions collapse?",
+      "Could the observation conflict with the instrument's assumptions instead of the proposed cause?",
+      "If every candidate fails a requirement, what should you examine about the original list?",
+      "What separates the last remaining explanation from an explanation independently supported by evidence?",
+      "How would you record the precise circumstances under which a candidate should return?"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Hypothetico-deductive reasoning",
+    "definition": "Propose an explanation, derive an observable consequence and test whether the predicted result occurs under specified conditions.",
+    "medicine": "It turns an intuitive clinical impression into a claim that can be checked and helps a doctor see which assumptions a disappointing result puts in doubt.",
+    "benefits": [
+      "State an expected finding before seeing the result.",
+      "Choose between hypotheses with distinct observable implications.",
+      "Investigate whether a failed prediction arose from the hypothesis or its test conditions."
+    ],
+    "reasons": [
+      "Post-hoc explanations can fit almost any result.",
+      "Many positive observations fit several hypotheses.",
+      "Predictions can depend on hidden assumptions about timing.",
+      "A poorly designed test can defeat a sound hypothesis.",
+      "Recording predictions supports learning when cases are reviewed."
+    ],
+    "questions": [
+      "If this explanation held, what should be observable tomorrow that is absent today?",
+      "What feature must remain stable for your prediction to follow?",
+      "Could a rival hypothesis predict exactly the same result?",
+      "What result are you prepared to count as evidence against your idea?",
+      "How would you test the prediction without quietly changing the outcome definition?",
+      "What would you predict if the same process started at a different time?",
+      "Did your test have a realistic opportunity to reveal the expected difference?",
+      "If the prediction fails, which supporting assumption could be checked independently?",
+      "If the prediction succeeds, which competing hypothesis survives that success?",
+      "What second prediction would distinguish the surviving accounts more sharply?"
+    ]
+  },
+  {
+    "id": 5,
+    "name": "Causal reasoning",
+    "definition": "Assess whether changing one factor would change an outcome, considering timing, alternative causes and how the observations were generated.",
+    "medicine": "Doctors interpret associations in research and clinical records. Decisions about a modifiable factor depend on whether it has an effect in the relevant circumstances.",
+    "benefits": [
+      "Identify a shared cause of exposure and outcome.",
+      "Recognise that worsening illness may influence which intervention a patient receives.",
+      "Explain why a group comparison might predict an outcome yet mislead about an intervention."
+    ],
+    "reasons": [
+      "Association can survive adjustment while confounding remains.",
+      "Selecting only tested patients can create misleading patterns.",
+      "Reverse direction can produce the same association.",
+      "Effects can differ across populations and circumstances.",
+      "Distinguishing causes from predictors changes which clinical questions a study can answer."
+    ],
+    "questions": [
+      "What exactly would be changed, for whom and over what interval?",
+      "Does the proposed cause precede the relevant change in the outcome?",
+      "Which factor could independently increase both the exposure and the outcome?",
+      "Could the patients' early deterioration have influenced the decision you call the exposure?",
+      "Who entered the dataset and how might that selection create the association?",
+      "Which variable might lie on the pathway through which the effect operates?",
+      "What comparison would make the exposed and unexposed groups more alike at the start?",
+      "What observation would distinguish a causal effect from a shared background trend?",
+      "What would you expect in a setting where the proposed pathway is unavailable?",
+      "Which causal claim still survives if the measurement of initial severity is incomplete?"
+    ]
+  },
+  {
+    "id": 6,
+    "name": "Root-cause analysis",
+    "definition": "Reconstruct an adverse event and investigate the interacting conditions, decisions and failed safeguards that made it possible.",
+    "medicine": "A clinical incident often emerges at the intersection of people, equipment and workflow. Examining that intersection can reveal changes that prevent recurrence.",
+    "benefits": [
+      "Reconstruct how an abnormal result reached the wrong inbox.",
+      "Identify which handover step allowed an unresolved task to disappear.",
+      "Propose a process change and a way to detect recurrence."
+    ],
+    "reasons": [
+      "Stopping at the final mistake can leave its enabling conditions untouched.",
+      "Retrospect makes warning signs appear clearer than they were.",
+      "Different pathways can produce apparently identical incidents.",
+      "Local fixes can transfer risk to another team.",
+      "Near misses reveal safeguards that sometimes work and sometimes fail."
+    ],
+    "questions": [
+      "Where does the last directly observed event end and retrospective interpretation begin?",
+      "What made the action reasonable to the person who took it at the time?",
+      "Which pre-existing condition allowed one error to reach the patient?",
+      "When the same error happened previously without harm, what interrupted it?",
+      "Was a safeguard missing, unusable, bypassed or never triggered?",
+      "Who inherited the task at the point where ownership became unclear?",
+      "What interacting changes would explain why the incident happened on this shift?",
+      "Which proposed fix would still work when staff are tired or information is incomplete?",
+      "Where could the fix simply move the bottleneck or the risk?",
+      "Which future observation would show that the underlying failure recurs despite fewer reports?"
+    ]
+  },
+  {
+    "id": 7,
+    "name": "Mechanistic reasoning",
+    "definition": "Explain an outcome by tracing how components and processes produce it under stated conditions.",
+    "medicine": "A physiological mechanism links observations that otherwise look disconnected and helps a doctor anticipate what else should change when one link fails.",
+    "benefits": [
+      "Connect a clinical sign to an intermediate physiological process.",
+      "Locate a break in a proposed pathway.",
+      "Explain why similar outward findings can arise through different processes."
+    ],
+    "reasons": [
+      "A memorised association can fail outside its usual setting.",
+      "Feedback can mask the first disturbance.",
+      "Two pathways may converge on the same observable sign.",
+      "A mechanism that contradicts timing or scale needs revision.",
+      "A plausible pathway alone cannot establish how often an effect occurs in patients."
+    ],
+    "questions": [
+      "What physical or biological step connects the proposed cause to the finding?",
+      "Which intermediate change should occur first?",
+      "What must be transported, transformed or sensed at each link?",
+      "Which link could fail while everything upstream remains intact?",
+      "Could a compensatory response hide the original disturbance?",
+      "Is the proposed mechanism fast enough to explain the observed onset?",
+      "Which other pathway reaches the same endpoint through a different intermediate?",
+      "What measurement would separate the two pathways most directly?",
+      "Is a mechanism established in one tissue plausible in the tissue involved here?",
+      "What empirical observation would you still need before treating this explanation as clinically important?"
+    ]
+  },
+  {
+    "id": 8,
+    "name": "Forensic reasoning",
+    "definition": "Reconstruct a past event from traces, records and testimony while keeping competing sequences and source limitations explicit.",
+    "medicine": "Clinical teams often need to establish what happened during an unwitnessed episode or a fragmented handover, even when certainty remains limited.",
+    "benefits": [
+      "Reconcile a sequence across ambulance and hospital records.",
+      "Separate a device's measurement time from the note's entry time.",
+      "State which aspects of an unwitnessed event cannot be reconstructed."
+    ],
+    "reasons": [
+      "Contemporaneous and copied accounts carry different information.",
+      "Clock drift can reverse an apparent sequence.",
+      "Missing records can have mundane causes.",
+      "Recall can change after witnesses hear other accounts.",
+      "Responsible documentation preserves uncertainty for later reviewers."
+    ],
+    "questions": [
+      "Which traces were created during the event and which were created afterwards?",
+      "What does the timestamp mark: observation, entry, upload or later amendment?",
+      "Which witness had direct access to the feature being described?",
+      "Could two similar accounts derive from a common handover?",
+      "Which part of your sequence depends on clocks being synchronised?",
+      "Could the gap in the record reflect a workflow interruption?",
+      "What alternate sequence yields the same surviving traces?",
+      "Which physical or documentary trace would discriminate between the sequences?",
+      "What can you say about timing without assigning an exact minute?",
+      "How would you distinguish observation, inference and unresolved uncertainty in your account?"
+    ]
+  },
+  {
+    "id": 9,
+    "name": "Evidential reasoning",
+    "definition": "Judge what information supports a claim by examining its relevance, provenance, independence, reliability and limitations.",
+    "medicine": "A compelling-looking record may add little if it repeats an earlier source, measures a proxy or comes from a selected group.",
+    "benefits": [
+      "Trace a reported finding back to its original observation.",
+      "Identify corroboration that comes from genuinely independent sources.",
+      "Explain which uncertainty an additional result actually reduces."
+    ],
+    "reasons": [
+      "Copied findings can imitate agreement.",
+      "Measurements can be precise yet answer the wrong question.",
+      "Missingness may depend on illness severity.",
+      "A source can be reliable on one claim and weak on another.",
+      "Conflicting evidence often reveals an unexamined difference in context."
+    ],
+    "questions": [
+      "What exact claim does this item support and how directly?",
+      "Who produced the information and what could they actually observe?",
+      "If you removed every copied note, how many observations would remain?",
+      "Could the same process have introduced error into all the agreeing measurements?",
+      "What did the instrument measure and how closely does that track the clinical question?",
+      "Whose information was most likely to go missing from this sample?",
+      "What feature would make this source less trustworthy for this specific claim?",
+      "Do the apparently opposing reports refer to the same time, population and definition?",
+      "What new evidence could change the balance independently of what you already have?",
+      "How far can you go before your conclusion outruns the evidence?"
+    ]
+  },
+  {
+    "id": 10,
+    "name": "Bayesian reasoning",
+    "definition": "Update the relative plausibility of explanations by combining starting odds with how differently each explanation predicts the new evidence.",
+    "medicine": "Clinical findings have meaning in light of the patient's starting probability and the chance of seeing the same finding under alternatives.",
+    "benefits": [
+      "Estimate how a result changes the odds of a diagnosis.",
+      "Explain why identical results can imply different risks in two settings.",
+      "Avoid counting a correlated pair of observations as independent evidence."
+    ],
+    "reasons": [
+      "Base-rate neglect exaggerates uncommon explanations.",
+      "Confusing the probability of a result with the probability of disease reverses the question.",
+      "Evidence that fits every candidate may barely change the ranking.",
+      "Dependent findings can generate overconfident updates.",
+      "Decisions can require a different degree of certainty from explanations."
+    ],
+    "questions": [
+      "What was a defensible starting probability before this result was known?",
+      "In which reference population would that starting probability be appropriate?",
+      "How often would you see this result if the leading explanation were true?",
+      "How often would you see it under the strongest alternative?",
+      "If both explanations predict the finding equally well, what happens to their odds?",
+      "If the starting odds are 1 to 9 and the evidence triples them, what probability follows?",
+      "Which observations arose from the same underlying event and might be double-counted?",
+      "How would your answer change if the result came from a population with a lower starting risk?",
+      "Can you explain the update using counts of people as well as probabilities?",
+      "How much uncertainty in the starting odds would change the decision you are considering?"
+    ]
+  },
+  {
+    "id": 11,
+    "name": "Deductive reasoning",
+    "definition": "Derive a conclusion that must hold if the stated premises are true and the inference is valid.",
+    "medicine": "Clinical rules and research definitions support firm conclusions only within their assumptions. Following the logic exposes exactly where uncertainty enters.",
+    "benefits": [
+      "Check whether a trial participant meets all stated inclusion criteria.",
+      "Identify the unstated premise behind a clinical claim.",
+      "Construct a counterexample to a conclusion that sounds inevitable."
+    ],
+    "reasons": [
+      "A true conclusion can arise from invalid reasoning.",
+      "A valid inference can start from an inaccurate premise.",
+      "Necessary and sufficient conditions are easily confused.",
+      "Changes in definitions can invalidate an otherwise sound chain.",
+      "Showing the exact inferential step makes multidisciplinary review productive."
+    ],
+    "questions": [
+      "Could every premise hold while your conclusion is false?",
+      "Which premise carries the greatest burden in this argument?",
+      "Is the rule stated for every member of a group or only for most?",
+      "Where has a probable observation quietly become a certainty?",
+      "Would the reverse implication also follow, and what case would test it?",
+      "Which patient would satisfy the first two requirements but violate the third?",
+      "Has the meaning of a key term changed between premise and conclusion?",
+      "What is the weakest conclusion the premises guarantee?",
+      "Which single additional premise would justify the stronger claim?",
+      "If the argument is valid but conflicts with an observation, which premise can you verify independently?"
+    ]
+  },
+  {
+    "id": 12,
+    "name": "Inductive reasoning",
+    "definition": "Infer a provisional general pattern from a set of observations and judge how far it can extend to new cases.",
+    "medicine": "Experience becomes clinically useful when a doctor learns a regularity while recognising the population, setting and exceptions that constrain it.",
+    "benefits": [
+      "Formulate a pattern across repeated presentations.",
+      "Check whether a clinic-based observation generalises to primary care.",
+      "Revise a teaching rule when a new case reveals its boundary."
+    ],
+    "reasons": [
+      "Convenient samples can hide important subgroups.",
+      "Rare exceptions may matter clinically.",
+      "Repeated observations from one patient offer less breadth than independent cases.",
+      "A seasonal or service change can imitate a stable pattern.",
+      "Testing a generalisation on fresh cases limits hindsight."
+    ],
+    "questions": [
+      "What feature recurs across independently observed cases?",
+      "Which kinds of patients had no opportunity to appear in your sample?",
+      "Are twenty encounters with the same patient evidence about twenty different people?",
+      "Does the pattern survive when you change the observer or the clinic?",
+      "Is the group defined in a way that already guarantees your apparent discovery?",
+      "Which exception would narrow the rule without destroying its useful part?",
+      "What case is most unlike the originals while still falling within your proposed scope?",
+      "What prediction can you write down before you see the next case?",
+      "Which background change might have made a temporary trend look universal?",
+      "How would you describe your generalisation so a colleague knows where caution begins?"
+    ]
+  },
+  {
+    "id": 13,
+    "name": "Syllogistic reasoning",
+    "definition": "Test whether a conclusion about categories follows from two linked premises and their quantifiers, such as all, some or none.",
+    "medicine": "Clinical classifications and eligibility criteria often use nested categories. A change from some to all can alter who appears to qualify.",
+    "benefits": [
+      "Check category membership against a study definition.",
+      "Spot an invalid overlap claim in a referral rule.",
+      "Explain what a subgroup finding establishes about an individual."
+    ],
+    "reasons": [
+      "A shared property can falsely suggest identical groups.",
+      "Subgroup and whole-group claims often use different quantifiers.",
+      "An everyday term may denote different classes across two policies.",
+      "Negation can attach to the wrong part of a statement.",
+      "A diagram can expose a counterexample that fluent prose disguises."
+    ],
+    "questions": [
+      "Which three categories appear in this argument?",
+      "Does the middle category mean exactly the same thing in both premises?",
+      "If every member of A belongs to B, must every member of B belong to A?",
+      "If some members of B qualify, what else would establish that someone in A qualifies?",
+      "Could two patient groups share one sign yet have no patients in common?",
+      "Where does the claim change from some patients to every patient?",
+      "If no member of one group has a feature, what follows for its subgroups?",
+      "Does the wording establish that the category contains any patients at all?",
+      "Can you draw the smallest arrangement of overlapping groups that defeats the conclusion?",
+      "Which revision to a premise would make the proposed conclusion follow?"
+    ]
+  },
+  {
+    "id": 14,
+    "name": "Conditional reasoning",
+    "definition": "Work through the implications of if–then statements while distinguishing necessary conditions, sufficient conditions and exceptions.",
+    "medicine": "Protocols, safety nets and decision rules depend on exactly which condition triggers a conclusion and what can be inferred when it is absent.",
+    "benefits": [
+      "Interpret the trigger in a review protocol.",
+      "Identify when an observation satisfies only one condition in a multistep rule.",
+      "Explain why a recorded action may have occurred through another route."
+    ],
+    "reasons": [
+      "Everyday if–then language often hides exceptions.",
+      "Reversing a conditional can create an unwarranted diagnosis.",
+      "Missing information creates a third practical state beyond present or absent.",
+      "Multiple triggers can produce the same action.",
+      "A rule's scope can expire when the clinical setting changes."
+    ],
+    "questions": [
+      "Is the stated condition sufficient, necessary or both for the outcome?",
+      "What must be true before this rule even applies?",
+      "If several triggers can prompt a review, what can you infer from seeing a review documented?",
+      "Which case would meet the trigger yet lack the stated consequence?",
+      "If the trigger is unrecorded, can you treat it as absent?",
+      "How does the meaning change between if A and B, and if A or B?",
+      "Under a genuinely exceptionless rule, what follows when the consequence is absent?",
+      "Does the rule describe an obligation to act or a prediction about what actually happens?",
+      "Which exception would turn a seemingly contradictory case into an expected one?",
+      "How would you restate the rule so a colleague could tell exactly when to apply it?"
+    ]
+  },
+  {
+    "id": 15,
+    "name": "Transitive reasoning",
+    "definition": "Infer a relation between endpoints through a common middle term when that particular relation supports chaining.",
+    "medicine": "Ordering events, comparing measurements and navigating nested classifications often require valid chains. Many familiar clinical relationships do not support such a chain.",
+    "benefits": [
+      "Reconstruct event order from partial timestamps.",
+      "Infer an endpoint comparison on a common measurement scale.",
+      "Recognise when a chain of associations cannot justify a direct association."
+    ],
+    "reasons": [
+      "Measurements taken under different conditions can break a chain.",
+      "Approximately equal is a poor basis for exact ordering.",
+      "Similarity need not extend through a common example.",
+      "Mixed directions make seemingly neat chains inconclusive.",
+      "Identical labels can hide different reference groups."
+    ],
+    "questions": [
+      "What is the precise relation connecting the first pair and the second pair?",
+      "If A occurred before B and B before C, what is established about A and C?",
+      "If A resembles B and B resembles C, what would justify the same conclusion about A and C?",
+      "Do both statements refer to the same middle event or only to similarly named events?",
+      "Are all three measurements expressed on the same scale and under comparable conditions?",
+      "How does rounding affect a chain of apparently equal values?",
+      "What can you infer if each endpoint comes before the middle event?",
+      "If one timestamp is an interval, which endpoint ordering is still forced?",
+      "Could A be associated with B and B with C while A and C are unrelated?",
+      "What smallest change to one link makes the endpoint conclusion undecidable?"
+    ]
+  },
+  {
+    "id": 16,
+    "name": "Disjunctive reasoning",
+    "definition": "Evaluate alternatives connected by or, checking whether the options are exhaustive and whether more than one may hold.",
+    "medicine": "Clinical classifications, explanations and workflow decisions frequently offer alternatives whose boundaries can overlap or leave out a third possibility.",
+    "benefits": [
+      "Clarify whether a criterion accepts either or both findings.",
+      "Notice a false choice between two potentially coexisting processes.",
+      "Determine what an exclusion establishes in a genuinely exhaustive set."
+    ],
+    "reasons": [
+      "Everyday wording can conceal whether options are exclusive.",
+      "A leftover category may contain several explanations.",
+      "Negative evidence varies in whether it really removes an option.",
+      "Coexisting conditions require a different interpretation from alternatives.",
+      "Decision forms can force choices more narrowly than the evidence permits."
+    ],
+    "questions": [
+      "What exactly does or allow in this case: either one, both, or exactly one?",
+      "Who established that the offered options exhaust the possibilities?",
+      "Could both proposed processes explain different parts of the same presentation?",
+      "If one option becomes less likely, what justifies treating it as eliminated?",
+      "What third possibility would make your apparent choice premature?",
+      "If one alternative is established, when does the other still need checking?",
+      "Does the form require a single answer even though the underlying state permits two?",
+      "Which observation could identify both alternatives occurring together?",
+      "If neither category fits, is there a missing case or a mistaken definition?",
+      "What conclusion follows after one option is excluded, and which premise makes it follow?"
+    ]
+  },
+  {
+    "id": 17,
+    "name": "Contradiction-based reasoning",
+    "definition": "Temporarily accept a claim and trace its implications until an inconsistency reveals that some premise, definition or inference needs revision.",
+    "medicine": "Contradictions in clinical timelines and models can expose an error, provided the doctor checks which statements really conflict and which source warrants revision.",
+    "benefits": [
+      "Identify mutually impossible timestamps.",
+      "Test a proposed mechanism against a constraint it must obey.",
+      "Reconcile conflicting claims before carrying either into a discharge summary."
+    ],
+    "reasons": [
+      "A seeming conflict may reflect different times or definitions.",
+      "The contradiction alone rarely identifies the incorrect premise.",
+      "Discomfort with an unusual result can masquerade as logical impossibility.",
+      "Assuming an unreliable instrument is perfect can misplace blame.",
+      "Resolving conflicts explicitly prevents silent propagation of errors."
+    ],
+    "questions": [
+      "What follows if you temporarily assume the disputed claim is true?",
+      "Which exact pair of its consequences cannot both hold?",
+      "Could the conflicting statements describe different moments in time?",
+      "Do the two sources use the same meaning of normal, recent or first?",
+      "Is the result genuinely impossible or simply improbable?",
+      "What hidden assumption about the instrument creates the inconsistency?",
+      "If either of two premises could be wrong, what evidence distinguishes them?",
+      "Can you remove one assumption and make every observation cohere?",
+      "What must be abandoned, and what remains intact after the contradiction?",
+      "How would you record an unresolved inconsistency without choosing a winner by convenience?"
+    ]
+  },
+  {
+    "id": 18,
+    "name": "Recursive reasoning",
+    "definition": "Solve a problem by applying the same rule to smaller instances or to a preceding state, with a base case or stopping condition.",
+    "medicine": "Some clinical and administrative structures repeat at successive levels. A sound rule lets a doctor trace nested records, family relationships or serial model states without losing the starting assumptions.",
+    "benefits": [
+      "Trace a family relationship through successive generations.",
+      "Unpack a nested referral chain to its originating observation.",
+      "Check whether a recurrence for daily totals handles its first day correctly."
+    ],
+    "reasons": [
+      "An incorrect starting value contaminates later results.",
+      "A circular reference can keep a process running indefinitely.",
+      "Repeated application can amplify small errors.",
+      "A rule that works on one level may fail at a boundary.",
+      "Independent small examples make an opaque iterative calculation auditable."
+    ],
+    "questions": [
+      "What is the smallest version of this problem you can answer directly?",
+      "How does the answer at one stage depend on a previous or smaller stage?",
+      "What must decrease or change so that following the rule eventually ends?",
+      "What happens on the first day, when there is no previous daily total?",
+      "Can a referral point back to a record already visited?",
+      "If a branch has no children, what value should it contribute?",
+      "How would an erroneous starting value propagate after three applications?",
+      "Does the rule still work when two branches share an ancestor?",
+      "Can you solve a three-level example independently and compare the answers?",
+      "What clinical meaning disappears if the calculation returns only a final value?"
+    ]
+  },
+  {
+    "id": 19,
+    "name": "Combinatorial reasoning",
+    "definition": "Enumerate possible selections, arrangements or joint states while accounting for order, overlap and constraints.",
+    "medicine": "The number of possible combinations of findings, samples or staff assignments grows quickly. Systematic counting exposes missing cases and mistaken denominators.",
+    "benefits": [
+      "List the distinct patterns of several binary findings.",
+      "Check whether a sampling plan covers relevant combinations.",
+      "Count feasible allocations while preventing accidental double-counting."
+    ],
+    "reasons": [
+      "Order matters for some clinical sequences and not for others.",
+      "Mutually exclusive options change counts.",
+      "Distinct labels can describe the same underlying case.",
+      "Possibility does not imply equal probability.",
+      "Efficient grouping makes large spaces easier to audit."
+    ],
+    "questions": [
+      "Which elements can vary independently and which combinations are impossible?",
+      "Does reversing the order create a new clinical sequence or the same group?",
+      "How many possible presence-or-absence patterns exist for three findings before constraints?",
+      "What happens to the count if two findings can never coexist by definition?",
+      "Can you partition the possibilities so each case belongs to exactly one group?",
+      "Where might two descriptions be counting the same patient twice?",
+      "Which rare combination is missing from the way you sampled cases?",
+      "Why might two equally numerous groups have very different probabilities?",
+      "How could you use symmetry to simplify the count while preserving meaningful differences?",
+      "Can a second counting method reproduce your total or expose an omission?"
+    ]
+  },
+  {
+    "id": 20,
+    "name": "Constraint-based reasoning",
+    "definition": "Find which solutions are possible when all stated restrictions must hold simultaneously, and test whether the solution is unique.",
+    "medicine": "Clinical scheduling, record reconstruction and diagnostic puzzles can have several plausible answers until their restrictions are considered together.",
+    "benefits": [
+      "Detect incompatible requirements in a follow-up plan.",
+      "Narrow a possible timeline using several independent observations.",
+      "Explain when an assignment has multiple equally valid solutions."
+    ],
+    "reasons": [
+      "Satisfying every constraint separately can still fail to satisfy them jointly.",
+      "Some restrictions are negotiable preferences.",
+      "A newly added condition can invalidate earlier work.",
+      "A single feasible answer gives no proof of uniqueness.",
+      "Infeasibility can identify contradictory requirements rather than poor effort."
+    ],
+    "questions": [
+      "Which conditions are mandatory and which are preferences you could revisit?",
+      "What does each restriction remove from the set of possible answers?",
+      "Can you build an example satisfying each pair of conditions but failing the whole set?",
+      "Which time window constrains the sequence most tightly?",
+      "If you reorder the restrictions, do you reach the same feasible set?",
+      "What second allocation survives every requirement you have stated?",
+      "If no solution exists, which smallest group of requirements causes the conflict?",
+      "What extra observation would distinguish the remaining feasible timelines?",
+      "Which constraint came from the patient's circumstances and which from your own assumption?",
+      "How would you show a colleague that a solution remains possible after one requirement changes?"
+    ]
+  },
+  {
+    "id": 21,
+    "name": "Analogical reasoning",
+    "definition": "Map corresponding roles and relationships between two situations and examine which inferences survive that mapping.",
+    "medicine": "A well-chosen comparison can explain unfamiliar physiology or a care process. Its value depends on matching the relevant dependency and identifying where the correspondence fails.",
+    "benefits": [
+      "Explain a limiting step through a familiar queue.",
+      "Transfer a useful insight between two clinical workflows.",
+      "Identify where an educational analogy would generate a false prediction."
+    ],
+    "reasons": [
+      "Surface resemblance can hide opposite causal directions.",
+      "One element in the source may lack a counterpart in the target.",
+      "A useful analogy can fail when the operating range changes.",
+      "A strong comparison generates a checkable target prediction.",
+      "Explicit limits protect patients from misleading explanations."
+    ],
+    "questions": [
+      "Which role does each element in the first system play in the second?",
+      "What dependency links the matched roles?",
+      "If you rename every object, can you still describe what the cases share?",
+      "Which aspect of the source has no defensible clinical counterpart?",
+      "Does the relationship run in the same direction in both situations?",
+      "What novel prediction follows for the target if the mapping holds?",
+      "Could a different comparison fit the surface equally well yet predict the opposite?",
+      "Where would the source's behaviour change while the target's stays stable?",
+      "What example would preserve the vocabulary while breaking the relationship?",
+      "How could you explain the comparison's useful range to a patient in one sentence?"
+    ]
+  },
+  {
+    "id": 22,
+    "name": "Anomalous reasoning",
+    "definition": "Identify a departure from an expected pattern, establish that the comparison is fair and investigate what the discrepancy reveals.",
+    "medicine": "An unexpected trajectory can expose an overlooked process, a faulty measurement or an unsuitable baseline. The first task is to establish what is genuinely surprising.",
+    "benefits": [
+      "Notice a result incompatible with its prior trajectory.",
+      "Separate a real service change from a reporting change.",
+      "Investigate a discrepant clue before averaging it away."
+    ],
+    "reasons": [
+      "Population ranges and an individual's usual values can diverge.",
+      "Rare observations occur by chance in large sets.",
+      "Instrument changes can mimic physiology.",
+      "A single outlier can reveal an overlooked subgroup.",
+      "Both overreacting to noise and discarding exceptions obscure useful signals."
+    ],
+    "questions": [
+      "Against which baseline is this observation unusual?",
+      "Would it remain unusual for this individual at this time of day?",
+      "How many measurements offered a chance for one striking outlier to appear?",
+      "Did the device, sample handling or reporting method change?",
+      "Is the size of the deviation large relative to ordinary variation?",
+      "Does a second, independent observation reproduce the unexpected feature?",
+      "Could the observation belong to a subgroup with a different expected pattern?",
+      "Which existing explanation predicts the exception rather than merely tolerating it?",
+      "When would excluding this point erase the most informative part of the dataset?",
+      "What future pattern would make you revise the baseline itself?"
+    ]
+  },
+  {
+    "id": 23,
+    "name": "Antinomic reasoning",
+    "definition": "Identify rules or claims that yield mutually incompatible requirements under the same conditions and examine the assumptions responsible.",
+    "medicine": "Conflicting protocols or definitions can make an apparently straightforward clinical workflow impossible. Naming the conflict helps a team seek clarification about scope or priority.",
+    "benefits": [
+      "Identify two recording rules that require incompatible entries.",
+      "Show why two eligibility definitions classify the same case differently.",
+      "Ask who can resolve a conflict between simultaneous duties."
+    ],
+    "reasons": [
+      "A disagreement can disappear when scopes are clarified.",
+      "Apparent compliance may conceal an impossible requirement.",
+      "Changing a single definition may reconcile the rules.",
+      "Preserving both arguments makes escalation more informative.",
+      "Distinguishing a genuine conflict from an inconvenient trade-off protects scarce attention."
+    ],
+    "questions": [
+      "What does each rule require in this specific case?",
+      "Can both requirements hold at the same time under the same definitions?",
+      "Is the conflict in the facts, in the rules or in a hidden assumption?",
+      "Do the rules govern the same person, setting and time interval?",
+      "Can you construct the smallest realistic case that triggers both?",
+      "Would narrowing either rule's scope remove the inconsistency?",
+      "What legitimate purpose would be lost if you simply discarded one rule?",
+      "Does a stated priority or exception already resolve the conflict?",
+      "What information would clarify the contradiction, and what requires a value judgment?",
+      "How would you describe the unresolved pair so a colleague can verify it independently?"
+    ]
+  },
+  {
+    "id": 24,
+    "name": "Antithetical reasoning",
+    "definition": "Examine two opposing relationships, positions or tendencies and identify the dimension along which they oppose each other.",
+    "medicine": "Clinical aims can pull in opposing directions, and a contrast can clarify the conditions in which each tendency matters most.",
+    "benefits": [
+      "Explain how a lower decision threshold can increase detection and false alarms together.",
+      "Contrast opposing physiological influences on an outcome.",
+      "Present the strongest case for two rival priorities in planning care."
+    ],
+    "reasons": [
+      "Opposites can coexist in the same system.",
+      "Opposing positions can rely on different time horizons.",
+      "Reversing one conclusion may fail to produce its genuine alternative.",
+      "The balance can shift across patient circumstances.",
+      "Making the axis of opposition explicit can reveal shared goals."
+    ],
+    "questions": [
+      "Along which single dimension do these two positions actually point in opposite directions?",
+      "Does the opposition concern goals, mechanisms, measurements or values?",
+      "Could both tendencies operate at once even though they push the outcome in different directions?",
+      "What would tip the balance towards one tendency?",
+      "Does reversing the sign of the model correspond to a meaningful clinical opposite?",
+      "Could short-term and long-term outcomes make the two positions look further apart?",
+      "Which evidence would strengthen one position while weakening the other?",
+      "What do the strongest advocates on each side agree about?",
+      "Is the apparent opposition hiding a third option on a different dimension?",
+      "When would describing the positions as exact opposites distort the patient's choices?"
+    ]
+  },
+  {
+    "id": 25,
+    "name": "Higher-order relational reasoning",
+    "definition": "Compare or combine relationships themselves, such as judging whether one factor changes the strength or direction of another relationship.",
+    "medicine": "Many clinical questions concern a dependency that changes with context. Comparing relationships can expose effect modification and prevent misleading summaries.",
+    "benefits": [
+      "Ask whether a marker's relation to an outcome varies across groups.",
+      "Compare how workload influences delays in two services.",
+      "Distinguish an average difference from a difference in how quickly two measures change together."
+    ],
+    "reasons": [
+      "Group averages can conceal different underlying slopes.",
+      "Apparent interaction can depend on the chosen scale.",
+      "A third variable can change more than the baseline level.",
+      "Unequal observation ranges can imitate a relationship difference.",
+      "Explicit comparisons help doctors state which dependency their conclusion concerns."
+    ],
+    "questions": [
+      "Are you comparing two values or the relationships between two pairs of values?",
+      "Could two groups share an average yet differ in how steeply the outcome changes?",
+      "What third factor might change the effect of the first on the second?",
+      "Does the apparent difference persist on both absolute and relative scales?",
+      "Are the ranges of the predictor comparable in the groups?",
+      "What does it mean if two curves cross instead of remaining parallel?",
+      "Could unequal measurement precision create apparently different slopes?",
+      "What evidence would distinguish a change in baseline from a change in dependency?",
+      "Which part of a relationship between relationships must survive in a cross-domain comparison?",
+      "What prediction for a new group follows from your proposed interaction?"
+    ]
+  },
+  {
+    "id": 26,
+    "name": "Cross-domain reasoning",
+    "definition": "Carry a principle, representation or method from one field into another and verify how the receiving field constrains its use.",
+    "medicine": "Doctors borrow ideas from engineering, statistics and the social sciences. Applying them responsibly requires checking what the imported terms mean in the clinical setting.",
+    "benefits": [
+      "Use queueing concepts to examine a clinic bottleneck.",
+      "Translate a physical flow model into a question about volume balance.",
+      "Test whether a method from one specialty retains meaning in another."
+    ],
+    "reasons": [
+      "A shared word can denote different quantities.",
+      "Assumptions familiar in one field may be violated in medicine.",
+      "The unit of analysis may change during transfer.",
+      "A borrowed method can reveal a previously unmeasured variable.",
+      "Validation in the receiving setting helps distinguish insight from a persuasive metaphor."
+    ],
+    "questions": [
+      "Which result from another field are you trying to carry across?",
+      "What does each variable mean in the original domain and here?",
+      "Which assumptions does a specialist in the source field take for granted?",
+      "What plays the role of an arrival, departure or bottleneck in this clinic?",
+      "Does the receiving domain have feedback absent from the source model?",
+      "Where could a word such as resistance conceal two different measurements?",
+      "What would the borrowed principle predict that clinical intuition alone did not?",
+      "Which measurable outcome could test that prediction in the receiving setting?",
+      "Would a change in scale from an organ to a hospital undermine the transfer?",
+      "After adaptation, which part of the original principle is still doing explanatory work?"
+    ]
+  },
+  {
+    "id": 27,
+    "name": "Abstract reasoning",
+    "definition": "Represent the essential relationships of a problem in a form that remains useful when particular names and surface details change.",
+    "medicine": "A doctor can recognise shared structure across presentations or study designs while preserving the details that affect the validity of a conclusion.",
+    "benefits": [
+      "Represent repeated measurements as a trajectory.",
+      "Recognise the same confounding pattern across studies involving different exposures.",
+      "Summarise a case in terms that support a transferable question."
+    ],
+    "reasons": [
+      "Overly broad summaries erase clinically decisive differences.",
+      "Excessive detail prevents recognition of a common structure.",
+      "The same case can support several useful levels of description.",
+      "A good abstraction makes predictions possible on an unseen case.",
+      "Knowing how to reintroduce detail protects individualised judgment."
+    ],
+    "questions": [
+      "Which features could change without changing the logic of this case?",
+      "What is the simplest representation that still supports the intended inference?",
+      "If you remove every disease name, what roles and dependencies remain?",
+      "Which patient detail looks superficial but would reverse the conclusion?",
+      "Can two very different stories instantiate the same structure?",
+      "Can two similar stories demand different structures?",
+      "Would a graph, equation or verbal rule best preserve the relevant distinction?",
+      "What new case does your abstraction allow you to solve?",
+      "Which boundary case shows that your model has become too general?",
+      "How would you put the omitted detail back when moving from a teaching example to an individual patient?"
+    ]
+  },
+  {
+    "id": 28,
+    "name": "Hierarchical reasoning",
+    "definition": "Reasoning across nested levels of organisation or classification while keeping track of which claims belong at each level.",
+    "medicine": "A doctor moves between a person's findings, an organ system, a tissue and a cellular process. Evidence at one level can narrow the possibilities at another while leaving important exceptions.",
+    "benefits": [
+      "Locate the level at which an explanation still leaves a clinical finding unexplained.",
+      "Translate a molecular finding into a question about function that matters to the patient.",
+      "Organise a broad differential into branches that can be narrowed with evidence."
+    ],
+    "reasons": [
+      "Broad labels can hide important differences between subtypes.",
+      "A finding in a tissue sample may describe only part of an organ.",
+      "A hospital average can conceal clinically important variation between wards.",
+      "Two findings that sit under one parent category may arise by different routes.",
+      "Moving back to the whole patient can expose a cost invisible at the cellular level."
+    ],
+    "questions": [
+      "A tissue sample is abnormal. What extra evidence would justify a claim about the whole organ?",
+      "Two disorders share a parent category. Which inference can you carry from one to the other, and which needs fresh evidence?",
+      "A ward reports fewer falls while the hospital reports more. How could both observations be accurate?",
+      "At what level would you look for a single explanation of several apparently unrelated findings?",
+      "Which patient-level outcome would show that a change seen in cells actually matters?",
+      "How would you choose the next branch of a diagnostic tree if two labels overlap?",
+      "Which distinction disappears when you group these cases under a broader heading?",
+      "If a hospital policy appears ineffective, how would you tell whether the difficulty lies in its design or in one ward's implementation?",
+      "Which features justify subdividing a familiar category, and would that division change a decision?",
+      "What observation would make you abandon your chosen level of explanation and move up or down a level?"
+    ]
+  },
+  {
+    "id": 29,
+    "name": "Spatial reasoning",
+    "definition": "Inferring how objects, surfaces and spaces relate when a viewpoint, orientation or section changes.",
+    "medicine": "Images, drawings and examination findings often describe the same anatomy from different viewpoints. A doctor must align the views before deciding which structures could be involved.",
+    "benefits": [
+      "Build a three-dimensional account from neighbouring image slices.",
+      "Describe the position of a finding using a shared anatomical reference frame.",
+      "Check whether a suspected location could account for the distribution of observed signs."
+    ],
+    "reasons": [
+      "A change of viewpoint can make a fixed structure seem to move.",
+      "A mirror image and a rotation can look deceptively similar.",
+      "One slice can hide continuity that becomes apparent on adjacent slices.",
+      "Left and right can be miscommunicated when observers face opposite ways.",
+      "Knowing which structures could touch can rule out an otherwise plausible account."
+    ],
+    "questions": [
+      "After the image is rotated through 180 degrees, which structures remain adjacent even though their positions on the screen have changed?",
+      "Two round profiles appear on a single slice. What could show whether they belong to one folded tube or two separate tubes?",
+      "Which landmarks let you align two images taken with the patient in different positions?",
+      "What feature would distinguish a mirrored view from a rotated view of the same asymmetric structure?",
+      "A finding appears above a landmark on the screen. What do you need to know before calling it anatomically superior?",
+      "Which neighbouring slice would most clearly distinguish your two proposed shapes?",
+      "How could an oblique cut produce an ellipse through a circular structure?",
+      "Where would you expect a continuous tract to reappear if your reconstruction is correct?",
+      "What additional viewpoint would resolve an ambiguity that repeated inspection of this image cannot?",
+      "How would you describe the location to a colleague who cannot see the picture or your gestures?"
+    ]
+  },
+  {
+    "id": 30,
+    "name": "Temporal reasoning",
+    "definition": "Using sequence, duration, interval and change of pace to constrain what could have happened.",
+    "medicine": "An episode's course may distinguish explanations that produce the same findings at a single visit. A timeline also reveals what the record leaves uncertain.",
+    "benefits": [
+      "Reconcile symptom onset with when each observation was actually made.",
+      "Separate a recurring episode from a continuously changing course.",
+      "Reconstruct a handover timeline from observations with different time stamps."
+    ],
+    "reasons": [
+      "The first documented sign may occur long after the first symptom.",
+      "Irregular sampling can make gradual change appear sudden.",
+      "Different clocks or delayed chart entries can reverse an apparent sequence.",
+      "Duration and recurrence can distinguish otherwise similar histories.",
+      "A disputed time point can determine whether an explanation is even possible."
+    ],
+    "questions": [
+      "When was the finding first present, and when did someone first have an opportunity to notice it?",
+      "How would your account change if a note's time marked when it was entered rather than when the event occurred?",
+      "Two readings are six hours apart. What changes between them remain compatible with both values?",
+      "Which proposed cause is impossible under every ordering consistent with the records?",
+      "What question would turn “it happened recently” into an interval you can actually use?",
+      "Which event is the best independent anchor when two observers' clocks disagree?",
+      "How would you distinguish three brief episodes from one continuous episode with three observations?",
+      "If a symptom preceded an exposure, what causal stories are still open to you?",
+      "Which matters more for distinguishing the two accounts here: the order, the delay or the duration?",
+      "What new observation would shrink the uncertainty about the sequence most?"
+    ]
+  },
+  {
+    "id": 31,
+    "name": "Structural reasoning",
+    "definition": "Identifying how parts are connected and determining what those connections enable or constrain.",
+    "medicine": "Anatomical pathways and clinical services depend on their arrangement. Two systems with the same parts can behave differently when the connections change.",
+    "benefits": [
+      "Identify a shared junction that could link several downstream findings.",
+      "Trace how a referral reaches the team responsible for action.",
+      "Distinguish genuine backup arrangements from two routes dependent on a single component."
+    ],
+    "reasons": [
+      "An inventory of parts can overlook a critical missing connection.",
+      "Apparent redundancy can disappear when two routes share a bottleneck.",
+      "Location can explain why disruption of one small link has wide consequences.",
+      "A useful diagram exposes assumptions about direction and access.",
+      "Comparing arrangements can reveal a solution that adding more parts would miss."
+    ],
+    "questions": [
+      "Two services have identical staff and equipment. Which difference in their connections could explain unequal outcomes?",
+      "If one junction were unavailable, which parts of the pathway could still communicate?",
+      "What evidence shows that the arrow in your diagram represents a real transfer of information?",
+      "Two downstream functions fail together. Which shared upstream link is worth examining?",
+      "How could you distinguish two independent backup routes from two routes sharing a hidden dependency?",
+      "Which change in the arrangement would alter function even if every component stayed intact?",
+      "Where can information enter this system without ever reaching the person who must act?",
+      "Which part sits next to the problem yet plays no role in its route through the system?",
+      "What finding would force you to redraw a connection rather than add another component?",
+      "What is the smallest diagram that preserves every dependency needed to explain the outcome?"
+    ]
+  },
+  {
+    "id": 32,
+    "name": "Semantic reasoning",
+    "definition": "Inferring meaning by examining how a word, concept or category is used in context.",
+    "medicine": "Patients, clinicians and forms can use the same word for different experiences. Clarifying its meaning can change what evidence a doctor should seek.",
+    "benefits": [
+      "Translate an everyday symptom word into a description the patient recognises.",
+      "Check whether a study's outcome label matches the outcome a patient cares about.",
+      "Detect when two teams document the same term using different operational definitions."
+    ],
+    "reasons": [
+      "Familiar words can conceal disagreement about the underlying experience.",
+      "A changed definition can create an apparent trend without a change in illness.",
+      "A broader label can alter who qualifies for a study or service.",
+      "A patient's metaphor can convey information lost in a technical paraphrase.",
+      "Precise terms make clinical uncertainty easier to communicate."
+    ],
+    "questions": [
+      "When a patient says “dizzy”, what example from their own experience would clarify the word?",
+      "Two clinicians agree that someone is “stable”. What distinct claims might each be making?",
+      "Which part of a patient's description would be lost if you replaced it with a familiar diagnostic label?",
+      "A study reports “recovery”. What would you inspect before relating that result to the patient's goal?",
+      "Could two apparently conflicting reports become consistent under one explicit definition?",
+      "How would a changed case definition alter who enters the denominator of an audit?",
+      "Which words in this handover describe an observation, and which already contain an interpretation?",
+      "What borderline case would expose disagreement about where a category ends?",
+      "A patient repeats your words back accurately. How could you check whether you mean the same thing?",
+      "Which paraphrase preserves the patient's intended meaning while remaining useful to the next clinician?"
+    ]
+  },
+  {
+    "id": 33,
+    "name": "Probabilistic reasoning",
+    "definition": "Representing uncertainty and combining available information to judge how plausible alternative outcomes are.",
+    "medicine": "Doctors make decisions before outcomes are known. A defensible probability judgment specifies the event, the relevant population and the evidence available at that moment.",
+    "benefits": [
+      "Explain uncertainty using counts in a relevant comparison group.",
+      "Compare rare but plausible explanations with common alternatives.",
+      "Recognise when several observations depend on the same underlying process."
+    ],
+    "reasons": [
+      "A probability has little meaning without a defined outcome and time period.",
+      "The denominator can change the interpretation of an apparently striking event.",
+      "Dependent signs can create unjustified confidence when counted separately.",
+      "Small samples can produce runs and clusters by chance.",
+      "A plausible range can communicate limited knowledge more honestly than a precise figure."
+    ],
+    "questions": [
+      "What event exactly are you assigning a chance to, over what period and for whom?",
+      "Out of 100 comparable people, what counts would make your verbal estimate accurate?",
+      "Which comparison group best resembles this patient on the features that matter?",
+      "Two signs often occur together. How would their dependence change the weight you give the pair?",
+      "What would have to be true for a surprising cluster to be compatible with chance?",
+      "If the common explanation and a rare explanation both fit this clue, what else should affect their ranking?",
+      "Which uncertainty would shrink with another observation, and which reflects genuine variation between people?",
+      "How could two clinicians quote different risks while agreeing on all the underlying counts?",
+      "What range of probabilities could you defend if the denominator were only approximately known?",
+      "Which event is more likely to happen first, and how would that change the chance of observing the other?"
+    ]
+  },
+  {
+    "id": 34,
+    "name": "Statistical reasoning",
+    "definition": "Drawing conclusions about populations and differences from sampled data while accounting for variability, selection and uncertainty.",
+    "medicine": "Clinical research and service audits are samples produced by particular measurement processes. Their numbers acquire clinical meaning through the choices that generated them.",
+    "benefits": [
+      "Assess whether a study sample supports a conclusion about a particular patient group.",
+      "Distinguish a potentially meaningful difference from imprecision in its estimate.",
+      "Check how missing observations or changed denominators affect audit results."
+    ],
+    "reasons": [
+      "A large sample can preserve bias when selection is systematic.",
+      "A mean can obscure subgroups with very different experiences.",
+      "Repeated readings on one person do not provide independent observations from many people.",
+      "Excluding incomplete records can change the clinical question being answered.",
+      "Precision and clinical importance answer different questions."
+    ],
+    "questions": [
+      "A service reports shorter average waits. Who had to remain in the dataset for that improvement to appear?",
+      "Which unit was sampled here: visits, people or clinics, and how would that affect uncertainty?",
+      "Two studies estimate the same effect with different intervals. What explains their different precision?",
+      "What distribution could have the reported mean while leaving many patients worse off?",
+      "Which missing patients would most threaten the conclusion if their outcomes differed?",
+      "How would you explain a narrow interval around a difference too small to matter to patients?",
+      "What variable might reverse the apparent association when data from different wards are pooled?",
+      "How would you tell a genuine change in the population from a change in who was measured?",
+      "What would an association measured only among clinic attendees tell you about those who never attended?",
+      "Which new sample would most sharply test whether this finding travels beyond the original setting?"
+    ]
+  },
+  {
+    "id": 35,
+    "name": "Counterfactual reasoning",
+    "definition": "Considering how the same case would have unfolded under a specified alternative to what actually happened.",
+    "medicine": "Patients and clinicians often ask whether an outcome would have differed if an earlier event had changed. A careful answer separates the observed history from the assumptions needed to construct its alternative.",
+    "benefits": [
+      "Examine whether recovery after an action supports a claim that the action caused it.",
+      "Anticipate how an incident might have unfolded with a functioning safeguard.",
+      "Explain why an individual's unobserved alternative outcome remains uncertain."
+    ],
+    "reasons": [
+      "Improvement can occur along a natural course even after a memorable event.",
+      "Changing one earlier fact can alter several later events.",
+      "Comparisons can be biased when people receiving different care began with different risks.",
+      "Two causal models can fit the same history and predict different alternatives.",
+      "Explicit assumptions make a retrospective judgment fairer to the people involved."
+    ],
+    "questions": [
+      "What precise event would you change in this history, and what would remain as it was immediately beforehand?",
+      "Which later events would also change as consequences of your imagined alternative?",
+      "A patient improved after an intervention. What evidence would help estimate the course without it?",
+      "Who would be a credible comparison for a person whose alternative outcome can never be observed?",
+      "Which assumption lets you use another person's experience to reason about this one?",
+      "If the suggested safeguard had worked, was there another route to the same outcome?",
+      "Can two explanations agree about everything observed yet disagree about what would have happened otherwise?",
+      "What would make a before-and-after comparison misleading in this particular case?",
+      "How would knowing only what was available at the time change your judgment of a past decision?",
+      "Which part of your alternative history can be checked, and which must remain conditional?"
+    ]
+  },
+  {
+    "id": 36,
+    "name": "Hypothetical reasoning",
+    "definition": "Exploring what follows if a premise is provisionally assumed, including premises whose truth remains undecided.",
+    "medicine": "Clinical teams can rehearse several plausible situations before one materialises. Keeping each assumption visible prevents a possibility raised in discussion from becoming a recorded fact.",
+    "benefits": [
+      "Explore the implications of an uncertain test finding before acting on it.",
+      "Construct contingency plans for different follow-up outcomes.",
+      "Probe the assumptions behind a colleague's proposed explanation."
+    ],
+    "reasons": [
+      "A possible explanation can gain false authority through repetition.",
+      "Contrasting scenarios can expose which uncertainty matters to the next decision.",
+      "An impossible premise can make a logically coherent plan unusable.",
+      "A useful scenario specifies what could show it has become relevant.",
+      "Separating branch-specific consequences from shared ones simplifies planning."
+    ],
+    "questions": [
+      "Suppose a surprising measurement is accurate. Which other observations would then become hard to explain?",
+      "What if the instrument were at fault instead: which of your conclusions would survive?",
+      "Which unverified assumption carries the greatest weight in this scenario?",
+      "Can your imagined situation occur under the constraints you have already accepted?",
+      "What observation would separate two possibilities that currently lead to the same plan?",
+      "If the assumed finding proves false tomorrow, which parts of today's plan could still be justified?",
+      "Which seemingly different scenarios make identical predictions within the available time?",
+      "How would you record an assumption clearly enough that a colleague could not mistake it for a confirmed fact?",
+      "Which additional assumption did you introduce between your opening premise and your final claim?",
+      "What is the simplest alternative scenario that exposes a weakness in the proposed plan?"
+    ]
+  },
+  {
+    "id": 37,
+    "name": "Predictive reasoning",
+    "definition": "Using a rule, model or pattern to make a checkable claim about a previously unobserved outcome.",
+    "medicine": "Predictions help a doctor notice when a working account fails. Their value depends on a clear outcome, time horizon and comparison with what was later observed.",
+    "benefits": [
+      "State what change a proposed mechanism predicts before reviewing the next observation.",
+      "Anticipate service demand over an explicit interval.",
+      "Audit whether a model's claimed probabilities match subsequent outcomes."
+    ],
+    "reasons": [
+      "A vague forecast can appear correct under nearly any result.",
+      "A model can succeed by relying on a shortcut that disappears elsewhere.",
+      "Forecast accuracy can change when the population or measurement process changes.",
+      "The commonest outcome is an essential benchmark for a complex model.",
+      "Recorded predictions help distinguish genuine foresight from hindsight."
+    ],
+    "questions": [
+      "What observable outcome and time window would make your forecast capable of being wrong?",
+      "What would the simplest forecast using only the usual frequency predict here?",
+      "Which input is available at the moment of prediction and which became known afterwards?",
+      "What result would count as a meaningful failure even if the average error stayed small?",
+      "A forecast performs well overall. In which group would a systematic error matter most?",
+      "How would a change in how clinicians detect the outcome affect apparent accuracy?",
+      "Which prediction differs most between your two proposed models?",
+      "If the forecast itself changes care, how might that alter what you later observe?",
+      "When outcomes assigned a one-in-five chance are followed up, what pattern would support those estimates?",
+      "What observation would show that the model needs revising rather than that an unlikely outcome occurred?"
+    ]
+  },
+  {
+    "id": 38,
+    "name": "Prognostic reasoning",
+    "definition": "Estimating the likely course, timing and range of outcomes of an existing health problem under specified circumstances.",
+    "medicine": "Patients often want to know what living with an illness may look like. Prognosis connects evidence from comparable cases to their health, circumstances and priorities.",
+    "benefits": [
+      "Discuss a range of possible trajectories using a time horizon meaningful to the patient.",
+      "Identify milestones that warrant revisiting an earlier estimate.",
+      "Distinguish prospects for survival, symptom relief and daily function."
+    ],
+    "reasons": [
+      "People with the same diagnosis can follow different courses.",
+      "A population estimate becomes less useful when its starting point differs from the patient's.",
+      "An accurate prediction about survival may answer a different question from one about independence.",
+      "Other events can prevent the outcome of interest from being observed.",
+      "New information can make a once reasonable estimate obsolete."
+    ],
+    "questions": [
+      "What future outcome does this person actually want to understand, and by when?",
+      "Does the reference group's clock start at symptom onset, diagnosis or another milestone?",
+      "Which features make the patients in the study better or worse comparisons for this person?",
+      "How might two people with the same label have different prospects for returning to daily activities?",
+      "What event could occur first and prevent observation of the outcome you are discussing?",
+      "How would the estimate change if the person has already remained well beyond an early high-risk period?",
+      "Which aspect of the expected course is sufficiently uncertain to express as a range?",
+      "What milestone would justify revisiting the estimate with the patient?",
+      "How might changes in available care limit the relevance of an older cohort?",
+      "How would you answer a question about time while preserving room for several plausible individual courses?"
+    ]
+  },
+  {
+    "id": 39,
+    "name": "Extrapolative reasoning",
+    "definition": "Extending an observed relationship beyond the range of times, values or populations in which it was established.",
+    "medicine": "A clinical relationship observed over a narrow range may change when a biological limit, different population or new measurement regime is reached. The proposed extension needs an explicit boundary.",
+    "benefits": [
+      "Interrogate forecasts that extend beyond the duration of follow-up.",
+      "Check whether a trend observed in one age range could apply in another.",
+      "Spot impossible values produced by a simple straight-line extension."
+    ],
+    "reasons": [
+      "A straight line can conceal a threshold, plateau or reversal.",
+      "Short observation periods reveal little about delayed changes.",
+      "Groups outside a study can differ in mechanisms as well as starting risk.",
+      "Uncertainty can grow quickly beyond the measured range.",
+      "Identifying the first unsupported step guides collection of new evidence."
+    ],
+    "questions": [
+      "Exactly where do the observed data end and your projected relationship begin?",
+      "What biological or practical boundary would your line eventually cross?",
+      "Could a straight line and a plateau fit the measured points equally well yet disagree later?",
+      "Which unmeasured group differs most from the people who established the original trend?",
+      "What mechanism would have to remain stable for the extension to hold?",
+      "How far could the prediction move before ordinary measurement error swamps the apparent trend?",
+      "Which new observation just outside the original range would best test the extension?",
+      "How would a change in background care alter a projection into later years?",
+      "What would doubling the projection distance do to your confidence, and why?",
+      "How would you communicate the difference between an observed benefit at one year and a projected benefit at five?"
+    ]
+  },
+  {
+    "id": 40,
+    "name": "Proportional reasoning",
+    "definition": "Relating quantities by ratios, rates and scale factors while keeping the numerator, denominator and units explicit.",
+    "medicine": "Clinical comparisons often turn on the population, area, mass or duration to which a count relates. A well-chosen denominator can change the interpretation of the same numerator.",
+    "benefits": [
+      "Translate a relative change into absolute counts for a stated baseline.",
+      "Compare event rates across groups with different observation periods.",
+      "Check whether a geometrical change scales a length, area or volume."
+    ],
+    "reasons": [
+      "Identical relative changes can have very different absolute consequences.",
+      "Ratios built from different denominators can sound comparable.",
+      "An average of subgroup rates can misrepresent the combined population.",
+      "Doubling a length need not double a volume.",
+      "An assumed proportional relationship can break when a process saturates."
+    ],
+    "questions": [
+      "Relative to what quantity is this measurement being expressed?",
+      "A risk falls from two in a hundred to one in a hundred. How could two accurate descriptions leave different impressions?",
+      "Two wards count the same number of events. What denominators would make a comparison fair?",
+      "When does combining two group rates require weighting by their different sizes?",
+      "Which quantities must stay fixed before doubling one quantity should double another?",
+      "If an image is magnified, which measurements scale with length and which with area?",
+      "What units remain after you divide these two quantities, and do those units answer the question?",
+      "Could a high rate in a small group coexist with most events arising in a lower-rate group?",
+      "What pattern in the data would show that a ratio you treated as constant actually changes with scale?",
+      "What denominator would make this finding most meaningful to the person affected?"
+    ]
+  },
+  {
+    "id": 41,
+    "name": "Mathematical reasoning",
+    "definition": "Choosing quantities and assumptions, expressing their relationships precisely and deriving consequences that can be checked.",
+    "medicine": "A doctor can use equations or formal models to establish exactly what the observations determine. Writing down the unknowns often reveals why a numerical answer would be unjustified.",
+    "benefits": [
+      "Build a balance equation linking inflow, outflow and observed change.",
+      "Check whether a reported result has units compatible with its interpretation.",
+      "Identify assumptions that make a clinical estimate sensitive to small errors."
+    ],
+    "reasons": [
+      "A mathematically valid calculation can still answer the wrong clinical question.",
+      "More unknowns than independent constraints can leave multiple valid explanations.",
+      "Checking extreme cases can expose a model that behaves implausibly.",
+      "Changing how a quantity is represented can reveal a simpler invariant.",
+      "An explicit model makes a hidden assumption available for challenge."
+    ],
+    "questions": [
+      "Which quantities are observed and which are parameters you would need to infer?",
+      "What balance or conservation principle could relate these variables?",
+      "A compartment grows by one litre per minute. What else would you need to determine its inflow?",
+      "What units should your predicted value have, and which factor could account for a mismatch?",
+      "Are all of your equations independent, or have you written the same constraint twice?",
+      "What happens to the result when one input approaches zero?",
+      "Can two different sets of parameter values reproduce every observation you currently have?",
+      "Which measurement error would change the conclusion most if you propagated it through the model?",
+      "What simpler representation preserves the feature that matters to the patient?",
+      "Which observed result would show that the equation describes the wrong process?"
+    ]
+  },
+  {
+    "id": 42,
+    "name": "Systems reasoning",
+    "definition": "Explaining how interactions, feedback and delays produce the behaviour of a whole system over time.",
+    "medicine": "A change that helps one part of a hospital can alter demand, flow or workload elsewhere. Seeing these connections helps doctors investigate persistent problems without attributing every outcome to individuals.",
+    "benefits": [
+      "Trace how a delayed discharge affects several teams and the patients waiting behind it.",
+      "Identify feedback that amplifies or dampens a physiological change.",
+      "Explain why repeated local fixes fail to change overall service performance."
+    ],
+    "reasons": [
+      "Feedback can sustain a problem after its original trigger disappears.",
+      "A delayed response can be mistaken for failure and prompt excessive correction.",
+      "A bottleneck can move after another constraint is relieved.",
+      "Improving a local metric can create costs outside its reporting boundary.",
+      "Drawing the boundary differently can reveal previously overlooked participants."
+    ],
+    "questions": [
+      "Where would you draw the boundary of this problem, and who disappears when you draw it there?",
+      "Which consequence feeds back to change the condition that produced it?",
+      "What delay could make a helpful intervention look ineffective at first?",
+      "If one queue clears, where might the waiting reappear?",
+      "Which quantity accumulates over time and which merely describes the rate of change?",
+      "Two hospitals use the same protocol. Which difference in interactions might produce different results?",
+      "What behaviour would continue after the original trigger was removed?",
+      "Which locally sensible action could make the whole service less effective?",
+      "What early signal would reveal that feedback is amplifying a disturbance?",
+      "Which small change would distinguish a feedback explanation from a one-way chain?"
+    ]
+  },
+  {
+    "id": 43,
+    "name": "Strategic reasoning",
+    "definition": "Choosing a sequence of actions in light of future possibilities, dependencies and limited resources.",
+    "medicine": "Clinical work often involves a series of decisions. The order affects what a team can learn, which options stay open and how readily a plan can be revised.",
+    "benefits": [
+      "Sequence investigations so an early result can guide later choices.",
+      "Plan a staged service improvement around staff capacity and expected demand.",
+      "Preserve future options while making progress under uncertainty."
+    ],
+    "reasons": [
+      "An early commitment can close options that later evidence would favour.",
+      "A useful first step may mainly create information for a later decision.",
+      "Resources spent early can constrain the response to a subsequent event.",
+      "A plan needs triggers for reassessment as conditions evolve.",
+      "Failure to anticipate dependencies can leave a sound next step impossible to execute."
+    ],
+    "questions": [
+      "Which action today would most improve the options available at the next decision?",
+      "What must be in place before the rest of this plan can work?",
+      "Which early commitment would be hardest to reverse if your expectation proves wrong?",
+      "What evidence would justify waiting, and what opportunity might be lost while waiting?",
+      "How much of the plan survives if demand arrives sooner than expected?",
+      "Which resource is adequate now but likely to constrain the third step?",
+      "Where should you place a reassessment point so that new information can still change the outcome?",
+      "What would a reasonable backup plan need that the first plan also consumes?",
+      "If a short-term improvement undermines a longer-term goal, how do you compare the two?",
+      "How would your first move change if the expected follow-up could not occur?"
+    ]
+  },
+  {
+    "id": 44,
+    "name": "Game-theoretic reasoning",
+    "definition": "Reasoning about interdependent choices when each participant's preferred action depends on what the others are expected to do.",
+    "medicine": "In healthcare, separately sensible choices by departments or organisations can produce an outcome none would choose together. Examining incentives can reveal ways to cooperate.",
+    "benefits": [
+      "Explain why two services might each retain spare capacity despite a shared shortage.",
+      "Identify what information teams need before they can coordinate a handover.",
+      "Design a cooperative routine that remains attractive when demand increases."
+    ],
+    "reasons": [
+      "A person's best response can change when another participant changes course.",
+      "Collective shortfalls can arise without ill intent.",
+      "Repeated interactions may support arrangements that would fail in a one-off encounter.",
+      "Uncertain information can make an apparently unhelpful choice understandable.",
+      "A credible commitment can change expectations before any resource moves."
+    ],
+    "questions": [
+      "Which participants can act independently, and which outcomes does each actually value?",
+      "How would one ward's preferred allocation change if it knew the other would share spare capacity?",
+      "Could both teams improve their position while each has a reason to hold back alone?",
+      "What does each participant know when choosing, and which uncertainty concerns the other's choice?",
+      "If these departments expect to work together next week, how might today's choices change?",
+      "What small commitment could make a mutually helpful arrangement credible?",
+      "Which incentive rewards a local decision whose combined effect frustrates everyone?",
+      "How would you tell a genuine conflict of goals from uncertainty about whether others will cooperate?",
+      "Could a change in the order of decisions unlock cooperation without increasing resources?",
+      "What outcome would you predict if each group acted on an inaccurate guess about the others' priorities?"
+    ]
+  },
+  {
+    "id": 45,
+    "name": "Adversarial reasoning",
+    "definition": "Anticipating how a capable opponent or critic could challenge a claim, adapt to a rule or counter a proposed strategy.",
+    "medicine": "A respectful challenge can uncover an unsupported assumption before a team commits to a diagnosis or policy. The object of scrutiny is the argument, and the person proposing it remains a collaborator.",
+    "benefits": [
+      "Build the strongest competing account of a difficult case at a clinical meeting.",
+      "Look for a counterexample to a proposed clinical rule.",
+      "Review whether a policy could appear successful on its chosen metric while missing its goal."
+    ],
+    "reasons": [
+      "A favourite explanation often receives less scrutiny than its rivals.",
+      "A weak objection can create false confidence that a proposal has been tested.",
+      "A convincing counterexample can reveal the boundary of a rule.",
+      "A fair challenge needs the same evidential standard on both sides.",
+      "Rehearsing disagreement makes it easier to revise a conclusion openly."
+    ],
+    "questions": [
+      "If you had to defend the strongest rival interpretation at tomorrow's meeting, which finding would you lead with?",
+      "What is the most credible objection a well-informed colleague could make to your conclusion?",
+      "Which assumption would a sceptic challenge first, and how could you check it fairly?",
+      "Can you construct a case that passes the proposed rule but fails its intended purpose?",
+      "What answer would make a critic withdraw their objection rather than move the goalposts?",
+      "How would you test whether you are demanding stronger evidence from the rival explanation?",
+      "If people changed their behaviour in response to a new audit rule, which weakness in the rule would become visible first?",
+      "Which conclusion still stands after granting the strongest reasonable objection?",
+      "How could a quality measure improve while the experience it is supposed to represent worsens?",
+      "How would you invite a junior colleague to present disconfirming evidence without turning disagreement into a contest?"
+    ]
+  },
+  {
+    "id": 46,
+    "name": "Optimisation reasoning",
+    "definition": "Selecting the best feasible option for a stated objective while accounting for constraints, trade-offs and uncertainty.",
+    "medicine": "Clinical services need to make choices with finite staff, appointments and equipment. Formalising the objective exposes whose outcomes count and which constraints are essential.",
+    "benefits": [
+      "Balance appointment allocation against waiting time and access across patient groups.",
+      "Compare feasible staffing plans against a clearly stated outcome.",
+      "Identify a solution that remains acceptable when demand changes."
+    ],
+    "reasons": [
+      "An easily counted objective can neglect an outcome patients value.",
+      "Hard safety constraints should be recognised before comparing feasible solutions.",
+      "Several options may involve trade-offs with no universally best choice.",
+      "A solution that is optimal on average can perform poorly under variation.",
+      "Finding the binding constraint can identify where extra capacity would matter."
+    ],
+    "questions": [
+      "What precisely is being maximised or minimised, and whose outcome does it describe?",
+      "What makes a proposed option infeasible even when its average performance looks good?",
+      "Can one feasible option improve access without worsening any other agreed objective?",
+      "Which assumption about demand is doing the most work in selecting this schedule?",
+      "What happens to the best plan when a safety or accessibility constraint is tightened?",
+      "Which patient group could experience the longest delay under the plan with the shortest mean wait?",
+      "If an extra appointment became available, where would it make the largest difference to the chosen objective?",
+      "How much performance would you trade for a plan that remains workable on unusually busy days?",
+      "Is the apparent best option simply the best among the few candidates you considered?",
+      "What observation after implementation would tell you that you optimised the wrong outcome?"
+    ]
+  },
+  {
+    "id": 47,
+    "name": "Instrumental reasoning",
+    "definition": "Selecting means that can actually achieve a specified end and making the links from action to outcome explicit.",
+    "medicine": "A clinical activity is worthwhile when it advances a goal that matters to the patient. Tracing that connection can expose missing steps or an activity pursued largely through habit.",
+    "benefits": [
+      "Check whether a proposed investigation could change a decision the patient faces.",
+      "Align a follow-up plan with the patient's functional goal.",
+      "Distinguish completion of a discharge task from successful continuity of care."
+    ],
+    "reasons": [
+      "A process measure can improve while its intended outcome stays unchanged.",
+      "A technically effective activity can fail when a necessary intermediate step is missing.",
+      "Different means can reach the same goal with different burdens.",
+      "A patient's objective may differ from the service's usual target.",
+      "Checking the means–end link can reveal when further action adds little value."
+    ],
+    "questions": [
+      "What outcome is this activity intended to make possible for this particular person?",
+      "If the task were completed perfectly, what would still need to happen before the patient benefited?",
+      "Which possible result of this investigation would change a decision already under consideration?",
+      "Are you pursuing an intermediate target after the original goal has changed?",
+      "What less burdensome route would reach the same patient-defined end?",
+      "Why should the proposed action influence the outcome in this setting?",
+      "What evidence would show that the chosen proxy has become disconnected from the patient's goal?",
+      "Who needs to act on the information once it has been collected?",
+      "Which available action looks productive but leaves the key obstacle untouched?",
+      "What would count as enough progress to stop adding further steps?"
+    ]
+  },
+  {
+    "id": 48,
+    "name": "Second-order reasoning",
+    "definition": "Tracing how the immediate effect of a decision changes the conditions or behaviour that produce its later consequences.",
+    "medicine": "A sensible first effect can trigger a less obvious second one. A doctor uses this perspective to anticipate downstream workload, behaviour and patient experience.",
+    "benefits": [
+      "Trace how a new alert could change staff attention over time.",
+      "Anticipate follow-up demands created by a change in testing policy.",
+      "Consider how modifying eligibility rules affects the people who seek care."
+    ],
+    "reasons": [
+      "Immediate benefits are usually easier to measure than delayed costs.",
+      "People adapt to new rules and can change the outcome of a policy.",
+      "A new demand may appear in a team absent from the original discussion.",
+      "Delayed consequences can reinforce or undermine the original goal.",
+      "Defining the later outcome in advance makes unintended effects easier to detect."
+    ],
+    "questions": [
+      "Once the immediate change occurs, what does it make easier or harder for the next person?",
+      "If every team adopted this individually sensible rule, what new problem could emerge?",
+      "What behaviour might people reasonably change after the new target is announced?",
+      "A reminder increases completed checks this week. How might its repeated use change attention next month?",
+      "Which group receives the benefit first, and which group inherits the later work?",
+      "Could an initially positive result increase reliance on a fragile part of the service?",
+      "What second consequence might offset the improvement visible on the dashboard?",
+      "How could a new eligibility boundary alter the mix of people counted as waiting?",
+      "Which later effect would you measure now so that its appearance could be recognised?",
+      "At what point in the chain do your assumptions become too weak to support a firm prediction?"
+    ]
+  },
+  {
+    "id": 49,
+    "name": "Risk-based reasoning",
+    "definition": "Comparing possible harms by considering their likelihood, severity, exposure and the uncertainties affecting them.",
+    "medicine": "A rare event may matter if its consequences are serious, while a common minor burden can dominate the experience of many patients. Risk judgments make these differences explicit.",
+    "benefits": [
+      "Prioritise safety reviews across events of different frequency and consequence.",
+      "Describe how a safeguard changes the likelihood or severity of harm.",
+      "Communicate residual uncertainty after a risk-reduction measure."
+    ],
+    "reasons": [
+      "A raw count hides how often people were exposed to the hazard.",
+      "Rare severe outcomes can disappear in average performance measures.",
+      "Introducing a safeguard can shift risk to another group.",
+      "The same numerical risk can have different practical implications for different patients.",
+      "Historical rates can understate risk when circumstances have changed."
+    ],
+    "questions": [
+      "What harmful event is being considered, over what exposure and for whom?",
+      "Is the apparent rise in incidents due to more exposure, better reporting or a greater chance per exposure?",
+      "Which matters more here: a small frequent burden or a severe uncommon outcome, and according to whose priorities?",
+      "Where does uncertainty about severity differ from uncertainty about likelihood?",
+      "Which group bears risk that is diluted in the service-wide average?",
+      "How would a proposed safeguard change the chain leading to harm?",
+      "What harm remains possible even if every part of the safeguard works as designed?",
+      "Which fact would make an earlier risk estimate unreliable in today's setting?",
+      "What is the cost of delaying action while trying to estimate a rare event more precisely?",
+      "How would you present both the absolute frequency and the consequence to someone deciding whether the risk is acceptable?"
+    ]
+  },
+  {
+    "id": 50,
+    "name": "Decision-theoretic reasoning",
+    "definition": "Choosing among actions by relating uncertain outcomes to their probabilities and to the value the decision-maker assigns to them.",
+    "medicine": "Clinical choices frequently involve outcomes that cannot all be maximised together. A transparent comparison shows how evidence and personal priorities each shape a decision.",
+    "benefits": [
+      "Compare options when one offers a higher chance of benefit at a greater burden.",
+      "Identify when new information could realistically change the preferred action.",
+      "Explore how a patient's priorities could alter the choice even with identical evidence."
+    ],
+    "reasons": [
+      "The best-supported explanation need not imply a single preferred action.",
+      "A likely modest outcome and an unlikely valuable one can reverse rankings as preferences change.",
+      "An average benefit can conceal substantial differences in burdens people accept.",
+      "A decision may be robust despite uncertainty if all plausible estimates favour the same option.",
+      "Information has limited practical value when it cannot change the action."
+    ],
+    "questions": [
+      "What actions are genuinely available, including deferring the decision?",
+      "For each option, what outcomes are possible and who judges their importance?",
+      "How could two patients prefer different options while accepting exactly the same probabilities?",
+      "Which outcome would a simple average fail to capture about this patient's priorities?",
+      "At what likelihood of benefit would the preferred option switch?",
+      "Would the uncertainty interval cross that switching point?",
+      "What additional information could change the decision enough to justify its burden?",
+      "How would you handle a consequence the patient finds especially difficult to trade against other outcomes?",
+      "Can you identify an option that is worse than another on every outcome the patient values?",
+      "If a reasonable choice leads to a poor outcome, what would you examine to judge the quality of the original decision?"
+    ]
+  },
+  {
+    "id": 51,
+    "name": "Algorithmic reasoning",
+    "definition": "Designing an explicit sequence of repeatable steps, conditions and stopping rules that maps inputs to an output.",
+    "medicine": "A clinical pathway or audit procedure must handle ambiguous inputs, repeated steps and exceptions consistently. Testing those details can reveal where human judgment is needed.",
+    "benefits": [
+      "Write a reproducible rule for selecting records for a quality audit.",
+      "Trace how a clinical pathway handles missing or contradictory information.",
+      "Identify an exception that calls for escalation to a human reviewer."
+    ],
+    "reasons": [
+      "A rule that works on typical examples can fail at its boundaries.",
+      "An unhandled missing value can silently route a case down the wrong branch.",
+      "Repeated steps need a way to stop or seek help.",
+      "Order matters when one test changes the inputs available to the next step.",
+      "Explicit exceptions help distinguish a protocol's limits from errors in applying it."
+    ],
+    "questions": [
+      "What information must be available before the first step can run?",
+      "If two conditions are true at once, which branch is taken and why?",
+      "What should happen when a necessary value is missing rather than negative?",
+      "Can two people following your written steps reach different outputs from identical inputs?",
+      "What boundary example would reveal ambiguity in the word “above” or “within”?",
+      "Could the process return to an earlier step indefinitely, and what condition should stop it?",
+      "Which step can be reordered without changing the result, and which cannot?",
+      "What example would expose a valid case omitted by your eligibility rule?",
+      "How would you revise one branch without changing the behaviour on cases that already work?",
+      "Where does the information become too ambiguous for an automatic next step to be justified?"
+    ]
+  },
+  {
+    "id": 52,
+    "name": "Reverse reasoning",
+    "definition": "Working backwards from a desired or observed endpoint to identify prerequisites and possible paths leading to it.",
+    "medicine": "A doctor can start from a patient's desired function or a completed clinical event and uncover the steps that would have to precede it. Multiple paths may converge on the same endpoint.",
+    "benefits": [
+      "Plan a return to a valued activity by identifying necessary intermediate milestones.",
+      "Trace a missing result back through the steps needed for its delivery.",
+      "Identify which prerequisite blocks an otherwise feasible discharge plan."
+    ],
+    "reasons": [
+      "Working forward from habit can miss the prerequisite most relevant to the patient's goal.",
+      "A single endpoint can conceal several distinct routes.",
+      "A necessary condition can be mistaken for one sufficient to reach the outcome.",
+      "Some steps cannot be reconstructed uniquely from the final record.",
+      "A backwards plan can reveal the last point where an alternative was available."
+    ],
+    "questions": [
+      "If the patient has reached their stated goal, what must already be possible immediately beforehand?",
+      "Which of those prerequisites is essential and which merely appears in the usual pathway?",
+      "Could another sequence lead to the same endpoint without passing through your proposed step?",
+      "A result is absent from a record. Which earlier events could independently explain that endpoint?",
+      "Which intermediate milestone would show that a planned route remains feasible?",
+      "What would you check first if two proposed paths share the same final step?",
+      "What does the endpoint fail to tell you about the order of earlier events?",
+      "How would you turn your backwards chain into a workable forward plan?",
+      "Which prerequisite consumes time that is hidden when you count only the final activity?",
+      "At what point does reconstructing an observed path require new evidence rather than further logical inference?"
+    ]
+  },
+  {
+    "id": 53,
+    "name": "Divergent reasoning",
+    "definition": "Generating several meaningfully different interpretations, questions or solutions before deciding which to pursue.",
+    "medicine": "An initial explanation or familiar service model can narrow the search too quickly. Deliberately varying the underlying assumptions can produce options worth comparing.",
+    "benefits": [
+      "Generate competing explanations when familiar labels leave key findings unexplained.",
+      "Develop several ways to meet a patient's goal under practical constraints.",
+      "Invite perspectives that reveal unconsidered approaches to a service problem."
+    ],
+    "reasons": [
+      "Lists of near-synonyms can create a false impression of breadth.",
+      "A familiar example can anchor the options considered afterwards.",
+      "Using different starting assumptions produces alternatives that can be tested against each other.",
+      "Patients may identify a feasible option absent from a clinician's usual repertoire.",
+      "Separating generation from appraisal can keep an unfamiliar but promising idea alive long enough to examine it."
+    ],
+    "questions": [
+      "If your first explanation were unavailable, what genuinely different account could cover the same findings?",
+      "Which two candidates on your list are actually the same idea in different language?",
+      "What possibility emerges if you begin with the patient's description instead of the existing referral label?",
+      "How many different routes could achieve the goal while preserving the patient's stated constraint?",
+      "What would someone from another profession notice that your current framing leaves out?",
+      "Which implicit assumption do all your candidate solutions share, and what follows if you vary it?",
+      "What explanation would make a currently awkward observation expected?",
+      "Could the same problem be changed at the level of a person, a team or a process?",
+      "What is one unfamiliar option that could be explored cheaply enough to earn a fair hearing?",
+      "Which proposed alternatives make different predictions and therefore justify keeping both on the list?"
+    ]
+  },
+  {
+    "id": 54,
+    "name": "Convergent reasoning",
+    "definition": "Narrowing a set of possibilities by applying explicit criteria until a choice or short list is justified.",
+    "medicine": "A clinical team often has several defensible plans and little time to decide which deserves attention first.",
+    "benefits": [
+      "Reduce a long handover list to the issues that need a decision.",
+      "Rank candidate explanations by the findings they must account for.",
+      "Agree with a patient on which remaining option fits their priorities."
+    ],
+    "reasons": [
+      "It exposes criteria that quietly favour a familiar option.",
+      "It keeps clinical urgency distinct from explanatory likelihood.",
+      "It helps a team recognise when further elimination costs more than it gains.",
+      "It preserves a viable alternative when evidence is close.",
+      "It makes a narrowed decision easier to reopen when a key fact changes."
+    ],
+    "questions": [
+      "Which criterion would actually remove an option from today's list?",
+      "If you could retain only two explanations, which observations must both accommodate?",
+      "Why did the most familiar option survive the last cut?",
+      "Which apparently decisive finding is shared by every remaining candidate?",
+      "What would change if the patient's chief priority replaced convenience as the deciding criterion?",
+      "Which low-likelihood possibility warrants a separate safety check, and why?",
+      "Where could several minor concerns be drowning out one decisive objection?",
+      "If the leading options tied, which next observation would break the tie?",
+      "At what point would another round of discussion cease to improve this choice?",
+      "What finding tomorrow would justify reopening the option you set aside?"
+    ]
+  },
+  {
+    "id": 55,
+    "name": "Synthetic reasoning",
+    "definition": "Combining separate pieces of information into a coherent account whose parts jointly explain more than any piece alone.",
+    "medicine": "A patient's symptoms, physiology and daily experience often sit in different records. Joining them can reveal a relationship that each record obscures.",
+    "benefits": [
+      "Connect observations from different professions into one case account.",
+      "Link a physiological change to a specific loss of everyday function.",
+      "Identify the piece of a referral that would connect two otherwise separate findings."
+    ],
+    "reasons": [
+      "It helps prevent fragmented explanations across specialties.",
+      "It reveals dependencies that vanish in a list of facts.",
+      "It exposes an attractive story's unsupported connecting step.",
+      "It allows a patient's experience to revise a physiological account.",
+      "It produces an account a new clinician can reconstruct and question."
+    ],
+    "questions": [
+      "What can the nurse's observation and the patient's account explain together?",
+      "Which finding changes meaning once the timing of the others is known?",
+      "What single connection would turn these three facts into an explanation?",
+      "On what evidence does that connection depend?",
+      "Which piece still sits awkwardly outside the account you have built?",
+      "If two findings share a cause, what third observation would become intelligible?",
+      "Which apparent contradiction calls for two interacting processes?",
+      "What would be lost if you presented the findings as separate problems?",
+      "How would you describe the whole account to someone who knows only one part?",
+      "Which new observation would force you to rebuild the links between the pieces?"
+    ]
+  },
+  {
+    "id": 56,
+    "name": "Dialectical reasoning",
+    "definition": "Developing an account through sustained examination of opposing positions, their assumptions and any revision that their conflict warrants.",
+    "medicine": "Disagreement about care can reveal a hidden conflict over evidence, goals or the conditions under which a proposal works.",
+    "benefits": [
+      "Represent two opposing recommendations fairly at a case conference.",
+      "Identify an assumption that makes both teams' observations intelligible.",
+      "Negotiate a revised plan whose justification each participant can inspect."
+    ],
+    "reasons": [
+      "It reduces the tendency to defeat a weaker version of a colleague's argument.",
+      "It helps distinguish a factual dispute from a disagreement about values.",
+      "It makes revisions traceable to reasons.",
+      "It points out when apparent consensus hides an unresolved conflict.",
+      "It can uncover a better question than either side originally asked."
+    ],
+    "questions": [
+      "What is the strongest version of the view you currently reject?",
+      "Which observation does each position explain unusually well?",
+      "What shared assumption might be responsible for the dispute?",
+      "Would the disagreement survive if both sides used the same outcome and time horizon?",
+      "Which concern raised by the opposing team should alter your original position?",
+      "Where would a compromise simply combine the defects of both proposals?",
+      "What third account could explain why each side has seen convincing evidence?",
+      "What would persuade each side to revise its view?",
+      "Which conflict remains even if both participants agree on all the facts?",
+      "How would you record the reason your final position differs from your starting point?"
+    ]
+  },
+  {
+    "id": 57,
+    "name": "First-principles reasoning",
+    "definition": "Reconstructing an explanation or solution from basic constraints and well-supported premises, then checking how the result depends on them.",
+    "medicine": "Basic relationships such as conservation of mass help a doctor question a calculation or explanation that otherwise looks authoritative.",
+    "benefits": [
+      "Reconstruct a balance equation when its remembered form is doubtful.",
+      "Check whether a proposed mechanism respects physical constraints.",
+      "Explain a familiar rule's scope to a trainee."
+    ],
+    "reasons": [
+      "It reveals hidden assumptions in rules of thumb.",
+      "It permits progress when a memorised formula is unavailable.",
+      "It makes a units error visible.",
+      "It identifies conditions that break a useful approximation.",
+      "It distinguishes what the premises require from what still needs measurement."
+    ],
+    "questions": [
+      "What quantities can enter, leave or accumulate in the system you are describing?",
+      "Which basic relationship would remain true even if your preferred explanation failed?",
+      "Could you reconstruct the equation from its units and physical meaning?",
+      "Which step in that reconstruction relies on an empirical assumption?",
+      "Where have you silently assumed a constant volume or steady state?",
+      "What would the simplest possible case predict?",
+      "Would the explanation still work if one input fell to zero?",
+      "Which measurement supplies information the basic principles cannot provide?",
+      "Why does a familiar rule work under these particular conditions?",
+      "What departure from those conditions would make the rule give the wrong answer?"
+    ]
+  },
+  {
+    "id": 58,
+    "name": "Lateral reasoning",
+    "definition": "Reframing a problem or challenging a tacit constraint to discover an approach that the initial framing concealed.",
+    "medicine": "An apparently difficult clinical or service problem can persist because everyone has accepted the same mistaken description of it.",
+    "benefits": [
+      "Reframe repeated missed visits around transport or access.",
+      "Find a fresh way of eliciting a history when a standard question repeatedly fails.",
+      "Reconsider whether a ward delay begins at the stage where it becomes visible."
+    ],
+    "reasons": [
+      "It widens options when standard approaches repeatedly fail.",
+      "It makes arbitrary constraints visible.",
+      "It uncovers practical causes hidden by labels such as disengagement.",
+      "It generates inexpensive, reversible ways to explore a new frame.",
+      "It teaches the doctor to test an imaginative idea before adopting it."
+    ],
+    "questions": [
+      "What part of the problem statement quietly dictates the sort of answer you are seeking?",
+      "How would the question change if the delay began one step earlier?",
+      "Which constraint did anyone actually verify?",
+      "If extra staff were unavailable, what feature of the process would you inspect first?",
+      "How would a patient describe this problem without the clinic's terminology?",
+      "Could the event being counted be a consequence of the problem?",
+      "Which apparently irrelevant observation becomes important under a different framing?",
+      "Could reversing the order of two steps remove the obstacle?",
+      "What small comparison could distinguish your new framing from the original one?",
+      "What evidence would make you abandon the clever explanation?"
+    ]
+  },
+  {
+    "id": 59,
+    "name": "Generative reasoning",
+    "definition": "Constructing candidate models, explanations or designs that satisfy stated constraints and have consequences that can be examined.",
+    "medicine": "When the existing explanation fits poorly, a doctor needs alternatives concrete enough to be tested or discussed.",
+    "benefits": [
+      "Construct rival models for an unfamiliar pattern of observations.",
+      "Devise a feasible alternative way of collecting a missing observation.",
+      "Create a follow-up plan around a patient's actual constraints."
+    ],
+    "reasons": [
+      "It expands the pool of genuinely different explanations.",
+      "It turns an intuition into a model with identifiable assumptions.",
+      "It exposes designs that collapse under real constraints.",
+      "It teaches the distinction between novelty and explanatory power.",
+      "It creates predictions that let a team compare new ideas."
+    ],
+    "questions": [
+      "Which observation must any new account explain from the outset?",
+      "Can you construct two accounts that fit the present facts through different mechanisms?",
+      "How would you change one assumption to generate a third possibility?",
+      "What relationship must your proposed model preserve?",
+      "Which feature of the new idea exists solely to rescue it from an inconvenient fact?",
+      "What observation follows from your proposal that nobody used to build it?",
+      "Can you invent a counterexample that the first model admits and the second excludes?",
+      "Which simpler design would deliver the same information?",
+      "Which of your proposals could another clinician test without your interpretation?",
+      "What would make the new account worth keeping after a familiar explanation improves?"
+    ]
+  },
+  {
+    "id": 60,
+    "name": "Decompositional reasoning",
+    "definition": "Breaking a complex problem into parts with defined interfaces, so that each can be examined and their interactions restored.",
+    "medicine": "A symptom or a delayed care pathway can have several distinct components, each requiring different information.",
+    "benefits": [
+      "Separate gait difficulty into initiation, balance, strength and endurance questions.",
+      "Divide a referral delay into sending, receipt, triage and booking intervals.",
+      "Allocate components of an assessment while preserving responsibility for their links."
+    ],
+    "reasons": [
+      "It reduces overload during a complex assessment.",
+      "It helps locate the stage at which information is lost.",
+      "It makes dependencies between tasks explicit.",
+      "It prevents the same issue being counted under several headings.",
+      "It reveals when a tidy subdivision hides an interaction that matters."
+    ],
+    "questions": [
+      "What smaller questions must be answered to resolve the original one?",
+      "Where would you place a boundary so that the pieces can be examined independently?",
+      "Which finding belongs at the interface between two parts?",
+      "Does the proposed breakdown cover every route through the process?",
+      "Could two components both be normal when their coordination fails?",
+      "Which subproblem should be examined first because the others depend on it?",
+      "Would a timeline reveal a different breakdown than a list of professions involved?",
+      "Which detail can you safely postpone without losing the original question?",
+      "What must each team member hand over for the pieces to fit again?",
+      "After solving the parts, what whole-system check is still needed?"
+    ]
+  },
+  {
+    "id": 61,
+    "name": "Emergent reasoning",
+    "definition": "Explaining how interactions among components produce a pattern at the group or system level that is difficult to see from one component alone.",
+    "medicine": "Ward congestion, communication failures and team behaviour can arise through interactions among individually sensible actions.",
+    "benefits": [
+      "Trace how small timing shifts across departments create a queue.",
+      "Explain why individually appropriate referrals overload a shared service.",
+      "Identify system changes that alter collective behaviour."
+    ],
+    "reasons": [
+      "It helps avoid attributing a system pattern to one person.",
+      "It draws attention to feedback between local decisions.",
+      "It makes thresholds and sudden transitions easier to investigate.",
+      "It anticipates effects that appear only at scale.",
+      "It improves selection of measures that capture the collective outcome."
+    ],
+    "questions": [
+      "Could every team be acting sensibly while the whole pathway deteriorates?",
+      "What interaction becomes possible only when several units share one resource?",
+      "Why might an extra arrival create a long delay on one day and none on another?",
+      "Which feedback could amplify a small disruption?",
+      "What group pattern would disappear if the units stopped influencing one another?",
+      "How could you distinguish a shared external cause from interaction among the units?",
+      "Which average hides the clustering that drives this outcome?",
+      "What would happen if two departments shifted their work by the same hour?",
+      "Which local improvement might worsen conditions for the whole service?",
+      "What measurement would reveal the collective pattern before an individual case draws attention?"
+    ]
+  },
+  {
+    "id": 62,
+    "name": "Interpersonal reasoning",
+    "definition": "Interpreting how interactions, roles and communication between people shape what they understand and do together.",
+    "medicine": "A care plan often depends on whether patients, carers and clinicians can exchange information and agree who will act.",
+    "benefits": [
+      "Notice when a companion's answers displace the patient's account.",
+      "Clarify an ambiguous handover between colleagues.",
+      "Repair a consultation when the participants have understood its purpose differently."
+    ],
+    "reasons": [
+      "It reveals relationship dynamics that affect the history.",
+      "It exposes mismatched expectations before follow-up fails.",
+      "It helps clinicians invite disagreement across differences in authority.",
+      "It improves the allocation of shared responsibilities.",
+      "It makes communication repair possible after trust is strained."
+    ],
+    "questions": [
+      "Who has had the least opportunity to speak, and what could that change?",
+      "What does each person believe the other has already explained?",
+      "Which interaction immediately preceded the patient's withdrawal from the discussion?",
+      "How could the consultation invite the patient's own view while respecting their companion?",
+      "Which request might sound routine to a doctor but burdensome to a family member?",
+      "What is a junior colleague risking by raising their concern here?",
+      "Who believes someone else now owns the next step?",
+      "How could you check whether a polite agreement reflects a shared understanding?",
+      "What would each participant say went wrong in the last conversation?",
+      "What observable change would show that communication between the parties has improved?"
+    ]
+  },
+  {
+    "id": 63,
+    "name": "Mentalistic reasoning",
+    "definition": "Inferring what another person might know, believe, feel or intend, while keeping those inferences open to correction.",
+    "medicine": "A patient's words and choices make better sense when the clinician checks the beliefs behind them and allows the patient to disagree.",
+    "benefits": [
+      "Explore what a patient understood a result to mean.",
+      "Notice a likely mismatch between the clinician's explanation and a family's interpretation.",
+      "Anticipate a listener's mistaken inference before a handover ends."
+    ],
+    "reasons": [
+      "It helps a doctor distinguish observable behaviour from an attributed intention.",
+      "It makes misunderstandings easier to detect.",
+      "It reduces the temptation to treat silence as consent.",
+      "It supports communication adapted to the listener's starting point.",
+      "It encourages direct verification when several interpretations fit."
+    ],
+    "questions": [
+      "What information was available to the patient when they made that choice?",
+      "What might the word “positive” have meant to them when they heard the result?",
+      "Which belief would make their apparently puzzling decision understandable?",
+      "What different belief could explain the same behaviour?",
+      "Which part of your account is observation and which part attributes an intention?",
+      "What might the patient assume you already know?",
+      "How could you ask about that interpretation without putting words in their mouth?",
+      "If the patient had understood the explanation differently, what might they have done instead?",
+      "How might distress change what they took from a technically accurate explanation?",
+      "What response from them would make you abandon your account of their thinking?"
+    ]
+  },
+  {
+    "id": 64,
+    "name": "Motivational reasoning",
+    "definition": "Investigating the goals, incentives and competing demands that may explain behaviour, and testing that account with the person concerned.",
+    "medicine": "A plan becomes more workable when the clinician understands what matters to the person and what a seemingly simple action would cost them.",
+    "benefits": [
+      "Explore why a patient prefers one follow-up option.",
+      "Distinguish an access barrier from ambivalence about a goal.",
+      "Find an outcome meaningful enough to guide a shared plan."
+    ],
+    "reasons": [
+      "It helps prevent assumptions about effort or character.",
+      "It distinguishes a person's goal from the means offered to achieve it.",
+      "It reveals competing priorities that emerge only outside the clinic.",
+      "It helps a doctor recognise incentives created by the service itself.",
+      "It gives the patient a clear opportunity to correct an attributed motive."
+    ],
+    "questions": [
+      "What goal might the person's choice be serving successfully?",
+      "Could the same action reflect a transport problem, a different priority or uncertainty?",
+      "What evidence would help separate those explanations?",
+      "What does the person say makes the proposed plan worth doing?",
+      "Which cost becomes visible only when you consider work or caring responsibilities?",
+      "Would the preference survive if the practical barrier disappeared?",
+      "What incentive might the clinic's booking system create unintentionally?",
+      "Are the patient and clinician pursuing different ends through the same proposed action?",
+      "What question would let the patient reject your account without losing face?",
+      "Which change in behaviour would genuinely test your proposed explanation of the motive?"
+    ]
+  },
+  {
+    "id": 65,
+    "name": "Moral reasoning",
+    "definition": "Judging what one ought to do by identifying obligations, harms, fairness and the reasons owed to those affected.",
+    "medicine": "Everyday clinical work includes choices about honesty, respect and responsibility, even when the medical facts are clear.",
+    "benefits": [
+      "Recognise when a convenient course shifts an unfair burden onto a patient.",
+      "Articulate why an error calls for an honest response.",
+      "Identify whose interests were overlooked in a routine decision."
+    ],
+    "reasons": [
+      "It sharpens recognition of ordinary moral issues that can pass as logistics.",
+      "It separates the doctor's private preference from a defensible obligation.",
+      "It makes foreseeable harms to quieter parties visible.",
+      "It builds consistency across patients with similar claims.",
+      "It helps a doctor give reasons that a person affected can question."
+    ],
+    "questions": [
+      "Who would bear the cost of the easiest course of action?",
+      "Which obligation applies even if nobody else will learn what happened?",
+      "Would you defend the same decision if the patient were less familiar to you?",
+      "What feature of this case could justify treating it differently from the last one?",
+      "Which harm would be avoided by speaking up, and which might speaking cause?",
+      "What promise, explicit or implied, has someone relied on?",
+      "Which person has a legitimate claim that has not entered the discussion?",
+      "Would a well-intended choice still be unfair in its effects?",
+      "What reason could you give directly to the person most disadvantaged?",
+      "After acting, what responsibility for explanation or repair would remain?"
+    ]
+  },
+  {
+    "id": 66,
+    "name": "Ethical reasoning",
+    "definition": "Working through conflicts among values, duties, rights and consequences to justify a course of action under uncertainty.",
+    "medicine": "Knowing the expected clinical outcome rarely settles how to weigh autonomy, privacy, benefit or fair access when these pull in different directions.",
+    "benefits": [
+      "Clarify which values conflict in a contested care decision.",
+      "Discuss a privacy concern alongside a family's wish to help.",
+      "Document why one course was preferred despite its moral cost."
+    ],
+    "reasons": [
+      "It prevents a contested value from being presented as a medical fact.",
+      "It makes the patient's priorities visible in deliberation.",
+      "It motivates a search for options that preserve more than one value.",
+      "It supports transparent review of difficult trade-offs.",
+      "It identifies points where consultation or clarification of professional obligations is warranted."
+    ],
+    "questions": [
+      "Which two legitimate commitments pull hardest in opposite directions here?",
+      "What factual uncertainty is making the value conflict harder to see?",
+      "Whose account of an acceptable burden is being used?",
+      "What option could preserve some of both interests at stake?",
+      "Which consequence would each person regard as hardest to reverse?",
+      "What further information could change the facts while leaving the conflict intact?",
+      "Would the chosen justification hold for another patient with different social standing?",
+      "Which voices should be heard before claiming that the trade-off is acceptable?",
+      "What would justify seeking an ethics consultation about this case?",
+      "What unresolved cost should be acknowledged to the person who disagrees?"
+    ]
+  },
+  {
+    "id": 67,
+    "name": "Pragmatic reasoning",
+    "definition": "Judging what a proposal would actually require and accomplish in the circumstances in which people must carry it out.",
+    "medicine": "A medically sensible plan can fail at the point of travel, communication, cost, scheduling or follow-up ownership.",
+    "benefits": [
+      "Check whether a patient can reach the proposed appointment.",
+      "Redesign follow-up around available communication channels.",
+      "Identify who will see and act on an outstanding result."
+    ],
+    "reasons": [
+      "It exposes small operational barriers before they become missed care.",
+      "It distinguishes an attractive intention from an executable plan.",
+      "It helps design contingencies around predictable disruptions.",
+      "It reduces avoidable burden on patients and carers.",
+      "It favours outcomes that can be checked in ordinary practice."
+    ],
+    "questions": [
+      "What exactly would the patient have to do between leaving today and the next review?",
+      "Which apparently small step depends on money, transport or digital access?",
+      "What happens if the letter arrives after the booking window closes?",
+      "Who will know if the referral never reaches its destination?",
+      "Which part of the plan is easiest to agree to and hardest to carry out?",
+      "How could a change in timing preserve its purpose while reducing the burden?",
+      "What useful option is available with the resources actually present?",
+      "What would the first sign of implementation failure look like?",
+      "How could the team check progress without transferring all the work to the patient?",
+      "What is the simplest contingency if the preferred route falls through?"
+    ]
+  },
+  {
+    "id": 68,
+    "name": "Contextual reasoning",
+    "definition": "Interpreting a finding or action in light of the setting, baseline, timing and circumstances that give it meaning.",
+    "medicine": "The significance of a measurement, behaviour or research result can change when its conditions of origin change.",
+    "benefits": [
+      "Interpret a change against the patient's own baseline.",
+      "Ask whether a study's population resembles the patient in front of you.",
+      "Distinguish a ward observation from the person's usual function at home."
+    ],
+    "reasons": [
+      "It protects against applying a reference value without examining its conditions.",
+      "It makes measurement circumstances part of interpretation.",
+      "It reveals when a familiar label has shifted meaning across settings.",
+      "It improves decisions about whether evidence can travel to a new population.",
+      "It encourages explanations of why apparently similar cases differ."
+    ],
+    "questions": [
+      "Under what conditions was this observation made?",
+      "How does it compare with this person's usual state on a similar day?",
+      "Would the finding mean the same thing during activity and at rest?",
+      "What change in setting could explain the apparent deterioration?",
+      "Which features of the study population decide whether its conclusion applies here?",
+      "What was happening immediately before the sample was taken?",
+      "Which detail would change the meaning of an otherwise reassuring observation?",
+      "How might the clinic environment alter what the patient is able to demonstrate?",
+      "What background assumption did the referring team reasonably make in its setting?",
+      "If you moved the same case to a different setting, which inference would you revisit first?"
+    ]
+  },
+  {
+    "id": 69,
+    "name": "Narrative reasoning",
+    "definition": "Organising events, experiences and interpretations into a coherent account while preserving uncertainty about sequence and cause.",
+    "medicine": "A patient's story can reveal priorities and turning points that disappear in a problem list, while gaps in a persuasive story still need checking.",
+    "benefits": [
+      "Reconstruct the timeline of a changing symptom.",
+      "Understand which loss the patient identifies as the start of illness.",
+      "Communicate a case history that distinguishes recollection from corroborated events."
+    ],
+    "reasons": [
+      "It helps a doctor listen for events selected for their personal significance.",
+      "It reveals where accounts use different starting points.",
+      "It protects against equating a compelling sequence with a causal chain.",
+      "It improves continuity when a story passes between teams.",
+      "It creates room for a patient to correct a polished but misleading summary."
+    ],
+    "questions": [
+      "Where does the patient begin the story, and why there?",
+      "Which turning point matters most to them even if the chart scarcely mentions it?",
+      "Which event is securely dated and which is reconstructed from memory?",
+      "What stretch of time has been compressed into a single phrase?",
+      "What second storyline could fit the same documented events?",
+      "Does the order of events justify the causal link the account implies?",
+      "Which details would you lose by retelling this solely as a symptom list?",
+      "Where do two narrators differ in emphasis while agreeing on the facts?",
+      "What would you ask before filling a gap in the story yourself?",
+      "What does the patient change when you read your summary back to them?"
+    ]
+  },
+  {
+    "id": 70,
+    "name": "Perspectival reasoning",
+    "definition": "Examining a situation from distinct vantage points and tracking how access to information, goals and responsibilities change what is visible.",
+    "medicine": "Patients, families and professionals can each see a genuine part of a case that is inaccessible to the others.",
+    "benefits": [
+      "Compare accounts of function at home and in hospital.",
+      "Identify whose observations are missing from a planning discussion.",
+      "Explain why two participants evaluated the same encounter differently."
+    ],
+    "reasons": [
+      "It reveals information that a single professional role cannot supply.",
+      "It reduces overconfidence produced by one's own vantage point.",
+      "It distinguishes disagreement about facts from differences in priorities.",
+      "It helps reconcile apparently inconsistent reports across settings.",
+      "It supports fairer decisions when power affects whose view carries weight."
+    ],
+    "questions": [
+      "What can the patient observe over a week that the team cannot see in ten minutes?",
+      "Which part of the decision is visible to the ward team but hidden from the family?",
+      "What would the account look like from the night shift?",
+      "Where do two descriptions differ because the observers saw different settings?",
+      "Which perspective has been treated as neutral simply because it is familiar?",
+      "If you swapped roles, which cost would become easier to notice?",
+      "Whose account would most directly address the disputed claim?",
+      "Can both sides be right about different parts of the same process?",
+      "Which viewpoint is absent because the person was never asked?",
+      "How would you combine the accounts while keeping their sources clear?"
+    ]
+  },
+  {
+    "id": 71,
+    "name": "Metacognitive reasoning",
+    "definition": "Monitoring how one's own reasoning is proceeding and deliberately changing the strategy, confidence or checking process when warranted.",
+    "medicine": "A clinician can know many mechanisms yet still persist with the wrong method for the question at hand.",
+    "benefits": [
+      "Notice when a vivid recent case dominates a judgement.",
+      "Switch from rapid recognition to deliberate comparison when a detail clashes.",
+      "Track where personal confidence and accuracy diverge."
+    ],
+    "reasons": [
+      "It helps detect premature closure during familiar presentations.",
+      "It encourages calibration against outcomes and independent checks.",
+      "It identifies when memory load is larger than the actual inferential demand.",
+      "It guides decisions to slow down or seek a second view.",
+      "It allows a clinician to practise the step that repeatedly goes wrong."
+    ],
+    "questions": [
+      "How did you arrive at the leading answer before you began explaining it?",
+      "Which part of your confidence comes from familiarity with the story?",
+      "What are you currently trying to do, and does that strategy answer the question?",
+      "Which piece of evidence did you spend least time considering?",
+      "What error does your usual way of solving this kind of case tend to produce?",
+      "Would writing the alternatives down change what you compare?",
+      "At what moment should you switch from recognition to systematic checking?",
+      "What independent check would challenge your judgement most effectively?",
+      "If your conclusion is wrong, which step was most vulnerable?",
+      "What could you compare with the eventual outcome to calibrate your confidence?"
+    ]
+  },
+  {
+    "id": 72,
+    "name": "Epistemic reasoning",
+    "definition": "Examining what a claim is based on, what its evidence warrants and what remains unknowable from the information available.",
+    "medicine": "Clinical decisions draw on measurements, testimony, records and research that vary in reliability, independence and relevance.",
+    "benefits": [
+      "Separate a directly observed sign from a copied chart assertion.",
+      "Explain what a result can establish within its measurement limits.",
+      "State explicitly which clinical question remains open."
+    ],
+    "reasons": [
+      "It prevents repeated documentation from masquerading as independent confirmation.",
+      "It improves precision about the source of uncertainty.",
+      "It helps identify questions that require different evidence.",
+      "It supports honest explanations of uncertainty to patients.",
+      "It helps teams maintain provisional conclusions without turning them into permanent facts."
+    ],
+    "questions": [
+      "Who first observed the finding, and who repeated it?",
+      "What would you still know if every copied mention were removed?",
+      "What exactly does this instrument measure, and how does that support the claim?",
+      "Which part of the conclusion goes beyond the data?",
+      "Can the current evidence distinguish absence from a failure to observe?",
+      "What sort of evidence would answer the remaining question?",
+      "Does the source have access to the event it describes?",
+      "Which uncertainty could better measurement reduce, and which would persist?",
+      "How strong a claim could you defend to someone with access to the same record?",
+      "What would make “we cannot tell from these data” the most informative answer?"
+    ]
+  },
+  {
+    "id": 73,
+    "name": "Reflective reasoning",
+    "definition": "Re-examining a previous judgement in light of its context, consequences and later evidence to improve future practice.",
+    "medicine": "A completed case offers a chance to see how a decision was reached, including sound decisions that had poor outcomes.",
+    "benefits": [
+      "Reconstruct a difficult consultation before the outcome was known.",
+      "Use feedback to identify an overlooked question.",
+      "Turn a case review into a specific change to test next time."
+    ],
+    "reasons": [
+      "It limits hindsight distortion by recovering what was knowable at the time.",
+      "It separates the quality of a process from the luck of its outcome.",
+      "It surfaces habits repeated across otherwise different cases.",
+      "It turns vague unease into a targeted improvement.",
+      "It preserves helpful actions that an adverse outcome could otherwise obscure."
+    ],
+    "questions": [
+      "What did you actually know when you made the decision?",
+      "What alternatives seemed plausible then, before the outcome became familiar?",
+      "Which judgment looks different only because you now know how the case ended?",
+      "What part of a good decision deserves preserving despite a poor result?",
+      "Which earlier cue takes on significance in hindsight, and was it usable then?",
+      "Where did the patient's account differ from your memory of the encounter?",
+      "What recurring feature links this episode with another difficult consultation?",
+      "Which specific action would you change in an otherwise identical future case?",
+      "What would you observe to tell whether that change helped?",
+      "What would a colleague who was present add to your reconstruction?"
+    ]
+  },
+  {
+    "id": 74,
+    "name": "Critical reasoning",
+    "definition": "Examining the premises, evidence and structure of an argument to determine how much of its conclusion is justified.",
+    "medicine": "Clinical claims can sound persuasive while relying on an ambiguous comparator, an unmeasured assumption or a shift in outcome.",
+    "benefits": [
+      "Interrogate the inference in a research abstract.",
+      "Identify an unsupported step in a referral's conclusion.",
+      "Distinguish an outcome meaningful to the patient from a convenient proxy."
+    ],
+    "reasons": [
+      "It strengthens resistance to impressive but irrelevant statistics.",
+      "It reveals missing comparison groups and hidden assumptions.",
+      "It helps clinicians challenge claims constructively across seniority.",
+      "It clarifies exactly which part of a conclusion survives scrutiny.",
+      "It makes reasoning transparent enough for colleagues to audit."
+    ],
+    "questions": [
+      "What is the precise conclusion the speaker wants you to accept?",
+      "Which premise carries most of its weight?",
+      "Would the result look different against a more appropriate comparator?",
+      "Has an association become a causal claim somewhere in the argument?",
+      "Which outcome was measured, and how closely does it track what matters to patients?",
+      "What assumption would a sceptical but informed reader dispute first?",
+      "Does the argument switch the meaning of a key term halfway through?",
+      "Which excluded cases could change the conclusion if included?",
+      "How much of the claim survives if its weakest premise is withdrawn?",
+      "What stronger argument could be made from the same evidence without overstating it?"
+    ]
+  },
+  {
+    "id": 75,
+    "name": "Falsification-based reasoning",
+    "definition": "Seeking observations that a proposed explanation cannot readily accommodate and specifying in advance how such observations would change it.",
+    "medicine": "A clinician can accumulate compatible findings while overlooking the one feature that challenges a favoured explanation.",
+    "benefits": [
+      "Specify what the current account predicts should be present.",
+      "Choose a check on which competing models give different expectations.",
+      "Reassess an unexpected result while considering measurement error."
+    ],
+    "reasons": [
+      "It makes a favoured explanation genuinely open to revision.",
+      "It improves selection of informative observations.",
+      "It reveals ad hoc exceptions introduced to protect a fragile account.",
+      "It distinguishes a failed prediction from an unreliable measurement.",
+      "It helps teams agree in advance on when to reconsider."
+    ],
+    "questions": [
+      "What observation would be difficult to explain if your preferred account were correct?",
+      "Which prediction did you commit to before seeing the result?",
+      "Would the test have been informative if either outcome counted as support?",
+      "What alternative makes a different prediction under the same conditions?",
+      "Could measurement error explain the failed prediction, and how would you check?",
+      "Which auxiliary assumption links the hypothesis to the observation?",
+      "How many exceptions have you added since the original proposal?",
+      "What evidence would favour replacing the model over adding another exception?",
+      "What would count as a meaningful challenge to a probabilistic prediction?",
+      "At what point would you tell the team that the original explanation no longer earns its place?"
+    ]
+  },
+  {
+    "id": 76,
+    "name": "Heuristic reasoning",
+    "definition": "Using a shortcut that exploits a recurring pattern to reach an efficient judgement, while monitoring when its assumptions fail.",
+    "medicine": "Time and information are often limited. A useful clinical shortcut needs both a reliable cue and a recognisable point at which to stop using it.",
+    "benefits": [
+      "Use a familiar pattern to focus the first questions.",
+      "State when a rapid judgement needs a fuller review.",
+      "Explain the working shortcut to a trainee together with its exceptions."
+    ],
+    "reasons": [
+      "It improves selection of shortcuts suited to the local setting.",
+      "It makes the cue driving a snap judgement identifiable.",
+      "It reveals environmental changes that invalidate a once-reliable cue.",
+      "It helps prevent a memorable case from outweighing the base rate.",
+      "It reserves deliberate analysis for situations in which the shortcut is most vulnerable."
+    ],
+    "questions": [
+      "What cue is doing most of the work in your first impression?",
+      "Why has that cue been reliable in your usual setting?",
+      "In which patient group would you expect the shortcut to perform poorly?",
+      "Is this example common, or merely easy to bring to mind?",
+      "What warning sign would trigger a slower assessment?",
+      "What would happen if the base rate changed but the cue stayed familiar?",
+      "How much would it cost to check the shortcut against one independent observation?",
+      "What did the last exceptional case reveal about the rule's boundaries?",
+      "Can you explain when the shortcut helps without presenting it as a law?",
+      "Which quick rule would you retire if its false alarms began to dominate?"
+    ]
+  },
+  {
+    "id": 77,
+    "name": "Non-monotonic reasoning",
+    "definition": "Revising or withdrawing a previously warranted conclusion when new information defeats an assumption on which it depended.",
+    "medicine": "Records and handovers accumulate information. A later correction can invalidate several earlier inferences even when those inferences were reasonable at the time.",
+    "benefits": [
+      "Withdraw an interpretation after a specimen is reidentified.",
+      "Trace which parts of a plan relied on an outdated history.",
+      "Communicate a changed working conclusion across teams."
+    ],
+    "reasons": [
+      "It prevents outdated assumptions surviving in copied notes.",
+      "It separates a justified change of mind from an arbitrary reversal.",
+      "It exposes downstream conclusions that require a second look.",
+      "It helps preserve still-valid parts of an earlier account.",
+      "It teaches precise communication about what changed and why."
+    ],
+    "questions": [
+      "What earlier conclusion was reasonable only while a particular assumption held?",
+      "Which new fact defeats that assumption?",
+      "Does the new evidence undermine the source, the rule or the conclusion itself?",
+      "If the specimen label was corrected, which interpretations must be revisited?",
+      "Which earlier conclusions remain sound after the correction?",
+      "Would restoring one missing detail reinstate the former conclusion?",
+      "What new exception limits a general rule you used yesterday?",
+      "Which entry in the handover could perpetuate the old inference?",
+      "What should a colleague learn about why you changed your view?",
+      "How would you distinguish justified withdrawal from overreacting to a single noisy result?"
+    ]
+  },
+  {
+    "id": 78,
+    "name": "Ontological reasoning",
+    "definition": "Clarifying what sorts of things a model describes and which relationships or properties can meaningfully belong to each kind.",
+    "medicine": "Clinical records can confuse a symptom with a diagnosis, a measured value with a patient state, or a risk category with an event.",
+    "benefits": [
+      "Distinguish a test result from the condition it is intended to detect.",
+      "Clarify what exactly is counted in a clinical audit.",
+      "Resolve disputes where one team uses a term for a process and another for an outcome."
+    ],
+    "reasons": [
+      "It exposes category errors before they enter a clinical model.",
+      "It makes definitions consistent across records and research datasets.",
+      "It limits double-counting of overlapping entities.",
+      "It prevents a label from being mistaken for an explanation.",
+      "It reveals which distinctions matter when a case is reclassified."
+    ],
+    "questions": [
+      "What kind of thing does this label refer to in the current record?",
+      "Are you counting patients, episodes, measurements or diagnoses?",
+      "Could one patient contribute several instances to the category you are counting?",
+      "Is this term naming an observation, an underlying process or a prediction?",
+      "What must be true for two entries to describe the same event?",
+      "Can the relevant property belong to a population while remaining undefined for an individual?",
+      "When a threshold is crossed, what actually changes in the world and what changes only in the label?",
+      "Which categories overlap, and what mistake would treating them as exclusive create?",
+      "What distinctions disappear when a continuous measure becomes a binary flag?",
+      "Would a different definition change the clinical question or only the coding?"
+    ]
+  },
+  {
+    "id": 79,
+    "name": "Analogical abstraction",
+    "definition": "Comparing cases to extract a general relationship that survives changes in their surface details, then specifying its limits.",
+    "medicine": "A general structure can help a doctor recognise a familiar dependency in a new organ system or clinical workflow and test whether the analogy holds.",
+    "benefits": [
+      "Derive a common bottleneck principle from a clinic queue and a laboratory backlog.",
+      "Recognise a shared balance between inflows and outflows in unrelated settings.",
+      "Reject a superficially similar case that breaks an essential dependency."
+    ],
+    "reasons": [
+      "It makes existing knowledge retrievable in unfamiliar clinical settings.",
+      "It separates the essential relationship from vivid details.",
+      "It yields predictions that can be checked in a third case.",
+      "It exposes false analogies before they guide action.",
+      "It supports teaching a principle in a form a trainee can reuse."
+    ],
+    "questions": [
+      "Which roles correspond across the two cases when their objects have different names?",
+      "What relationship remains if all the surface details are stripped away?",
+      "Which feature seemed central in the first example but disappears in the second?",
+      "Can you express the shared pattern without using vocabulary from either case?",
+      "What would the extracted principle predict in a third, unfamiliar situation?",
+      "What superficially similar example breaks one indispensable link?",
+      "Which quantity would have to be measured in the new setting for the mapping to hold?",
+      "At what level does the resemblance become so broad that it predicts nothing?",
+      "What exception sets the useful boundary of the principle?",
+      "Could someone apply your abstraction to a fresh case and also identify a near-miss?"
+    ]
+  },
+  {
+    "id": 80,
+    "name": "Integrative reasoning",
+    "definition": "Coordinating several forms of inference so that the output of one appropriately constrains the next and the combined judgement addresses the whole problem.",
+    "medicine": "A difficult case can require explanation, prediction and a patient-centred decision. Each step has different evidence and a different standard of success.",
+    "benefits": [
+      "Link a differential diagnosis to a test whose possible results would change the ranking.",
+      "Carry uncertainty from an inference into the discussion of options.",
+      "Combine physiological evidence with the patient's priorities without treating them as interchangeable."
+    ],
+    "reasons": [
+      "It helps a doctor select the right operation at the right point.",
+      "It prevents uncertainty disappearing as information moves between stages.",
+      "It exposes conflicts between a plausible explanation and an appropriate action.",
+      "It makes multidisciplinary contributions mutually informative.",
+      "It enables review of which step limited the quality of the final decision."
+    ],
+    "questions": [
+      "What question must be answered before choosing the next way to reason?",
+      "How does the explanation you generated determine which observations would now be informative?",
+      "What uncertainty in the first step should carry into your prediction?",
+      "Where might the most likely explanation and the most prudent next action diverge?",
+      "Which part of the case calls for a patient's value judgement and which for an empirical estimate?",
+      "What evidence would send you back to an earlier stage?",
+      "Which discipline could test a premise that your own approach takes for granted?",
+      "If two methods give different answers, are they answering the same question?",
+      "Where did confidence grow without any new evidence during the handover between steps?",
+      "How could another clinician retrace the whole judgement and pinpoint its weakest link?"
+    ]
+  }
+]
