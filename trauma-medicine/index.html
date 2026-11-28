@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Trauma Medicine — Learn the 80 Patterns of Medical Reasoning</title>
-  <meta name="description" content="Train all 80 patterns of human reasoning across Atomic, Composite, and Meta-Reasoning levels through pre-hospital triage, resuscitation bays, family talks, and autopsy review.">
+  <title>Trauma Doctor — Train Your Clinical Reasoning</title>
+  <meta name="description" content="Play as a medical student on trauma rotation, learning how to think like a great trauma doctor across pre-hospital triage, resuscitation bays, family talks, and autopsy review.">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./trauma.css">
 </head>
@@ -19,16 +19,16 @@
           <span class="tm-hud-sub" id="hud-ladder">0/6 to T2 Resident</span>
         </div>
         <div class="tm-hud-stat">
+          <span class="tm-hud-kicker">Case</span>
+          <span class="tm-hud-val" id="hud-case">1/20</span>
+        </div>
+        <div class="tm-hud-stat">
           <span class="tm-hud-kicker">Cleared</span>
           <span class="tm-hud-val" id="hud-score">0/0</span>
         </div>
         <div class="tm-hud-stat">
           <span class="tm-hud-kicker">Streak</span>
           <span class="tm-hud-val" id="hud-streak">0</span>
-        </div>
-        <div class="tm-hud-stat">
-          <span class="tm-hud-kicker">Mastered</span>
-          <span class="tm-hud-val" id="hud-mastered">0/80</span>
         </div>
       </div>
 
@@ -38,8 +38,6 @@
           <input id="pace-slider" type="range" min="0.25" max="3" step="0.25" value="1" aria-label="Deterioration pace multiplier">
           <span class="tm-tabular" id="pace-value">1×</span>
         </label>
-
-        <button type="button" class="tm-btn tm-btn-ghost tm-hud-atlas-btn" id="hud-atlas-btn" tabindex="-1">80-Type Atlas</button>
 
         <button type="button" class="tm-icon-btn" id="mute-btn" tabindex="-1" aria-label="Toggle sound" aria-pressed="false" data-muted="false" title="Mute audio (M)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -82,81 +80,119 @@
           <polyline points="8,30 18,30 22,22 26,38 31,18 35,33 39,28 48,28" stroke="#f8fafc" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></polyline>
         </svg>
         <div>
-          <h1 id="tm-game-title">Trauma Medicine</h1>
-          <p class="tm-title-sub">Learn the 80 patterns of reasoning that make a great medical doctor.</p>
+          <h1 id="tm-game-title">Trauma Doctor. <span class="tm-title-accent">Exact calls.</span></h1>
+          <p class="tm-title-sub">
+            You're a medical student on trauma rotation—learning how to think like a great doctor before the crisis, inside the resuscitation bay, and after it. Weigh all six clinical records and timestamps to save every exact patient before they crash.
+          </p>
         </div>
       </div>
 
-      <p class="tm-title-phases">
-        Every case rotates to a new reasoning type across <strong>8 families</strong> and
-        <strong>3 levels</strong> (Atomic · Composite · Meta-Reasoning) spanning
-        <strong>Before</strong> (triage), <strong>Inside</strong> (resuscitation), and <strong>After</strong> (family talks &amp; autopsy).
-      </p>
-
       <div class="tm-setup-section">
-        <div class="tm-mode-grid" role="group" aria-label="Training mode">
-          <button type="button" class="tm-mode-btn is-active" data-setup-mode="zero-to-hero" aria-pressed="true">
-            <strong>Zero to Hero</strong>
-            <span>Adaptive Tier 1 → 6 ladder</span>
+        <div class="tm-section-kicker" id="difficulty-label">Choose a difficulty</div>
+        <div class="tm-diff-grid" role="radiogroup" aria-labelledby="difficulty-label">
+          <button type="button" role="radio" aria-checked="true" class="tm-diff-card is-active" data-difficulty="zero-to-hero">
+            <span class="tm-radio-dot" aria-hidden="true"></span>
+            <span class="tm-diff-copy">
+              <strong>From Zero to Hero</strong>
+              <span>Start at Tier 1 Intern. 6 consecutive clears climb a tier; 2 consecutive misses drop one.</span>
+            </span>
           </button>
-          <button type="button" class="tm-mode-btn" data-setup-mode="fixed" aria-pressed="false">
-            <strong>Pick a Tier</strong>
-            <span>Practice one complexity level</span>
+
+          <button type="button" role="radio" aria-checked="false" class="tm-diff-card" data-difficulty="nback">
+            <span class="tm-radio-dot" aria-hidden="true"></span>
+            <span class="tm-diff-copy">
+              <strong>Climb the Ladder</strong>
+              <span>N-back version of Trauma Doctor. Match 3 nested clinical briefings across N rounds and catch hidden clashes.</span>
+            </span>
           </button>
-          <button type="button" class="tm-mode-btn" data-setup-mode="nback" aria-pressed="false">
-            <strong>Rounds N-Back</strong>
-            <span>1-back to 6-back logic memory</span>
+
+          <button type="button" role="radio" aria-checked="false" class="tm-diff-card" data-difficulty="super-super-easy">
+            <span class="tm-radio-dot" aria-hidden="true"></span>
+            <span class="tm-diff-copy">
+              <strong>Tier 1 · Intern</strong>
+              <span>Confirmed charts, single-step calls, and optional shortlist.</span>
+            </span>
+          </button>
+
+          <button type="button" role="radio" aria-checked="false" class="tm-diff-card" data-difficulty="super-easy">
+            <span class="tm-radio-dot" aria-hidden="true"></span>
+            <span class="tm-diff-copy">
+              <strong>Tier 2 · Resident</strong>
+              <span>Confirmed charts, faster ward pace, and optional shortlist.</span>
+            </span>
+          </button>
+
+          <button type="button" role="radio" aria-checked="false" class="tm-diff-card" data-difficulty="very-easy">
+            <span class="tm-radio-dot" aria-hidden="true"></span>
+            <span class="tm-diff-copy">
+              <strong>Tier 3 · Fellow</strong>
+              <span>Confirmed charts, high-pressure pace, and optional shortlist.</span>
+            </span>
+          </button>
+
+          <button type="button" role="radio" aria-checked="false" class="tm-diff-card" data-difficulty="easy">
+            <span class="tm-radio-dot" aria-hidden="true"></span>
+            <span class="tm-diff-copy">
+              <strong>Tier 4 · Attending</strong>
+              <span>Ten patients. Settle one disputed clinical record.</span>
+            </span>
+          </button>
+
+          <button type="button" role="radio" aria-checked="false" class="tm-diff-card" data-difficulty="medium">
+            <span class="tm-radio-dot" aria-hidden="true"></span>
+            <span class="tm-diff-copy">
+              <strong>Tier 5 · Trauma Lead</strong>
+              <span>Three disputed records with coupled cross-checks.</span>
+            </span>
+          </button>
+
+          <button type="button" role="radio" aria-checked="false" class="tm-diff-card" data-difficulty="hard">
+            <span class="tm-radio-dot" aria-hidden="true"></span>
+            <span class="tm-diff-copy">
+              <strong>Tier 6 · Chief</strong>
+              <span>All six clinical records disputed in coupled cycles.</span>
+            </span>
           </button>
         </div>
 
-        <div class="tm-field-row" id="tier-selector-row" hidden>
-          <label for="tier-select">Clinical Tier</label>
-          <select id="tier-select" class="tm-select">
-            <option value="super-super-easy">Tier 1 · Intern (Confirmed charts)</option>
-            <option value="super-easy">Tier 2 · Resident (Faster pace)</option>
-            <option value="very-easy">Tier 3 · Fellow (High-pressure ward)</option>
-            <option value="easy">Tier 4 · Attending (1 disputed chart)</option>
-            <option value="medium">Tier 5 · Trauma Lead (3 coupled charts)</option>
-            <option value="hard">Tier 6 · Chief (All 6 charts coupled)</option>
-          </select>
-        </div>
+        <div class="tm-run-controls">
+          <div class="tm-control-col">
+            <label class="tm-section-kicker" for="cases-input">Cases per shift</label>
+            <input id="cases-input" class="tm-cases-input tm-tabular" type="number" min="20" max="1000" step="1" value="20">
+            <span class="tm-input-hint tm-tabular">20–1,000</span>
+          </div>
 
-        <div class="tm-field-row" id="nback-selector-row" hidden>
-          <label for="nback-select">N-Back Depth</label>
-          <select id="nback-select" class="tm-select">
-            <option value="1">1-Back</option>
-            <option value="2" selected>2-Back</option>
-            <option value="3">3-Back</option>
-            <option value="4">4-Back</option>
-            <option value="5">5-Back</option>
-            <option value="6">6-Back</option>
-          </select>
-        </div>
+          <div class="tm-control-col" id="speed-control-col">
+            <label class="tm-section-kicker" for="title-speed-slider">Master speed</label>
+            <div class="tm-speed-widget">
+              <button type="button" class="tm-speed-dial-btn" id="speed-dial-btn" aria-label="Cycle master speed">
+                <svg class="tm-speed-dial" viewBox="0 0 64 64" aria-hidden="true">
+                  <path class="tm-dial-track" d="M 15.0 49.0 A 24 24 0 1 1 49.0 49.0"></path>
+                  <path class="tm-dial-arc" id="speed-dial-arc" d="M 15.0 49.0 A 24 24 0 0 1 20.0 11.2"></path>
+                  <line class="tm-dial-needle" id="speed-dial-needle" x1="32" y1="32" x2="20" y2="18"></line>
+                  <circle class="tm-dial-hub" cx="32" cy="32" r="3.2"></circle>
+                </svg>
+              </button>
+              <div class="tm-speed-readout">
+                <span class="tm-speed-val tm-tabular" id="title-speed-val">1×</span>
+                <span class="tm-speed-sub tm-tabular" id="title-speed-crash">First crash in 42 s</span>
+                <input id="title-speed-slider" class="tm-speed-range" type="range" min="0.25" max="3" step="0.25" value="1" aria-label="Master speed multiplier">
+              </div>
+            </div>
+          </div>
 
-        <div class="tm-focus-grid" id="focus-filters-row">
-          <label class="tm-focus-field">
-            <span>Reasoning Family</span>
-            <select id="family-filter-select" class="tm-select">
-              <option value="all">All 8 Families (80 types rotating)</option>
-              <option value="diagnostic">1. Diagnostic &amp; Investigative (#1–10)</option>
-              <option value="logical">2. Logical &amp; Formal (#11–20)</option>
-              <option value="relational">3. Relational &amp; Abstract (#21–32)</option>
-              <option value="quantitative">4. Predictive &amp; Quantitative (#33–41)</option>
-              <option value="strategic">5. Strategic &amp; Systemic (#42–52)</option>
-              <option value="creative">6. Creative &amp; Synthetic (#53–61)</option>
-              <option value="social-ethical">7. Social, Psychological &amp; Ethical (#62–70)</option>
-              <option value="metacognitive">8. Metacognitive &amp; Epistemological (#71–80)</option>
+          <div class="tm-control-col" id="nback-control-col" hidden>
+            <label class="tm-section-kicker" for="nback-select">N-Back depth</label>
+            <select id="nback-select" class="tm-select tm-nback-select">
+              <option value="1">1-Back · Immediate</option>
+              <option value="2" selected>2-Back · Standard</option>
+              <option value="3">3-Back · Intermediate</option>
+              <option value="4">4-Back · Advanced</option>
+              <option value="5">5-Back · High Load</option>
+              <option value="6">6-Back · Maximum</option>
             </select>
-          </label>
-          <label class="tm-focus-field">
-            <span>Cognitive Level</span>
-            <select id="level-filter-select" class="tm-select">
-              <option value="all">All 3 Cognitive Levels</option>
-              <option value="atomic">Level 1 · Atomic Reasoning</option>
-              <option value="composite">Level 2 · Composite Reasoning</option>
-              <option value="meta">Level 3 · Meta-Reasoning</option>
-            </select>
-          </label>
+            <span class="tm-input-hint">Compare current briefing with N rounds back</span>
+          </div>
         </div>
 
         <div class="tm-field-row" id="shortlist-row">
@@ -167,13 +203,11 @@
         </div>
       </div>
 
-      <div class="tm-title-actions">
-        <div class="tm-title-left-actions">
-          <button type="button" class="tm-btn tm-btn-primary" id="start-shift-btn" data-start="true">Start Shift</button>
-          <button type="button" class="tm-btn tm-btn-ghost" id="open-atlas-btn">80-Type Atlas</button>
-          <button type="button" class="tm-btn tm-btn-ghost" id="open-guide-btn">How It Works</button>
-        </div>
-        <a class="tm-back-link" href="/games/">All Games</a>
+      <button type="button" class="tm-btn tm-btn-start" id="start-shift-btn" data-start="true">Start shift</button>
+
+      <div class="tm-title-footer">
+        <button type="button" class="tm-link-btn" id="open-guide-btn">How it works</button>
+        <a class="tm-back-link" href="/games/">All games</a>
       </div>
     </div>
 
@@ -203,32 +237,20 @@
       <div class="tm-breakdown" id="summary-reasoning"></div>
       <div class="tm-modal-actions">
         <button type="button" class="tm-btn tm-btn-primary" id="play-again-btn" data-start="true">New Shift</button>
-        <button type="button" class="tm-btn tm-btn-ghost" id="summary-atlas-btn">80-Type Atlas</button>
         <button type="button" class="tm-btn tm-btn-ghost" id="summary-title-btn">Title Menu</button>
       </div>
-    </div>
-  </div>
-
-  <!-- 80-Type Reasoning Atlas Modal -->
-  <div class="tm-overlay" id="atlas-modal" role="dialog" aria-modal="true" aria-labelledby="atlas-title" hidden>
-    <div class="tm-modal-card tm-atlas-card">
-      <div class="tm-modal-header">
-        <h2 id="atlas-title">80-Type Reasoning Atlas</h2>
-        <button type="button" class="tm-btn tm-btn-ghost" id="close-atlas-btn">Close</button>
-      </div>
-      <div id="atlas-body"></div>
     </div>
   </div>
 
   <!-- How It Works Guide Modal -->
   <div class="tm-overlay" id="guide-modal" role="dialog" aria-modal="true" aria-labelledby="guide-title" hidden>
     <div class="tm-modal-card">
-      <h2 id="guide-title">How Trauma Medicine Trains All 80 Reasoning Patterns</h2>
+      <h2 id="guide-title">How Trauma Doctor Works</h2>
       <ul class="tm-guide-list">
-        <li><strong>All 80 reasoning types, never repeating back-to-back:</strong> Cases rotate across all 8 reasoning families—Diagnostic, Logical, Relational, Quantitative, Strategic, Creative, Social/Ethical, and Metacognitive—and visit all 80 distinct patterns before repeating.</li>
-        <li><strong>Three cognitive levels:</strong> Practice <em>Atomic</em> operations (deduction, transitivity, spatial layout), <em>Composite</em> coordination (differential diagnosis, Bayesian risk updates, game-theoretic triage), and <em>Meta-Reasoning</em> (selecting which method applies, quarantining tainted sources, and non-monotonic revision).</li>
+        <li><strong>Train cold—just like a real rotation:</strong> Every case switches to a different clinical reasoning pattern across triage (before), resuscitation (inside), and family talks &amp; autopsy (after). You won't be told which pattern is tested until after you make your call, when the debrief breaks down the exact reasoning skill you just practiced.</li>
         <li><strong>Exact action slots:</strong> Each case requires 1 to 4 patient interventions. Click a bay on the monitor or press keys <strong>1–9, 0</strong> before a true target reaches the redline.</li>
         <li><strong>Disputed records (Tiers 4–6):</strong> Records marked <strong>?</strong> may have reversed arrows, swapped patients, or an alternate reading. Use the coupled Cross-Checks to determine the unique valid clinical world before acting.</li>
+        <li><strong>Climb the Ladder (N-Back):</strong> Track 3-statement clinical briefings across N rounds to judge validity, structural match, clinical domain, and lead patient under working-memory load.</li>
       </ul>
       <div class="tm-modal-actions">
         <button type="button" class="tm-btn tm-btn-primary" id="close-guide-btn">Got It</button>

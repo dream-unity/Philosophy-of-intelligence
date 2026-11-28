@@ -70,6 +70,8 @@ test('Trauma Medicine: complete 80-type taxonomy spans 8 families, 3 cognitive l
     ]) {
       assert.ok(!/\*[a-zA-Z]+\*/.test(text), `no raw markdown italics in #${r.number} ${r.id}: ${text}`);
     }
+    const spoilerRe = /\b(bayesian|syllogism|antinomic|dialectical|abductive|deductive|inductive|heuristics?|metacognitive|meta-reasoning|counterfactual|falsify|ontological|epistemic|combinatorial|divergent|decision-theoretic|game-theoretic|theory of mind)\b/i;
+    assert.ok(!spoilerRe.test(trial.order), `active directive must not spoil reasoning type #${r.number} ${r.id}: ${trial.order}`);
     for (const t of trial.targets) {
       assert.ok(trial.shortlist.includes(t), `#${r.number} shortlist includes target ${t}`);
     }

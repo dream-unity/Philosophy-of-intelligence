@@ -90,10 +90,11 @@ export class ZeroToHeroLadder {
 }
 
 export class TraumaSession {
-  constructor({ mode = 'zero-to-hero', tierId = 'super-super-easy', nbackLevel = 2 } = {}) {
+  constructor({ mode = 'zero-to-hero', tierId = 'super-super-easy', nbackLevel = 2, targetTrials = 20 } = {}) {
     this.mode = mode;
     this.fixedTierId = tierId;
     this.nbackLevel = nbackLevel;
+    this.targetTrials = Math.max(1, Math.min(1000, Math.round(Number(targetTrials) || 20)));
     this.ladder = mode === 'zero-to-hero' ? new ZeroToHeroLadder(0) : null;
 
     this.total = 0;
@@ -107,6 +108,10 @@ export class TraumaSession {
     this.byPhase = new Map();
     this.nbackPoints = 0;
     this.nbackMaxPoints = 0;
+  }
+
+  isComplete() {
+    return this.total >= this.targetTrials;
   }
 
   activeTierId() {

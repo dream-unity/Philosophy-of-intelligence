@@ -58,10 +58,10 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { ch: CHANNEL_IDS[Math.floor(rng() * CHANNEL_IDS.length)], role: rng() < 0.5 ? 'from' : 'to' };
     },
-    order({ ch, role }, sc, meta) {
+    order({ ch, role }, sc) {
       return role === 'from'
-        ? `${meta.shortName} rule: attend to every patient on the initiating (left) side of ${chLabel(sc, ch)}.`
-        : `${meta.shortName} rule: attend to every patient on the receiving (right) side of ${chLabel(sc, ch)}.`;
+        ? `Ward directive: attend to every patient on the initiating (left) side of ${chLabel(sc, ch)}.`
+        : `Ward directive: attend to every patient on the receiving (right) side of ${chLabel(sc, ch)}.`;
     },
     detail({ ch, role }, sc) {
       return `Each ${chLabel(sc, ch)} line reads "A ${chVerb(sc, ch)} B" — select every ${role === 'from' ? 'A (left)' : 'B (right)'}.`;
@@ -88,12 +88,12 @@ export const REASONING_ENGINES = {
     },
     order({ flagCh, clearCh }, sc, meta) {
       if (meta.id === 'falsification-based') {
-        return `Falsify the working list: start with patients in ${chLabel(sc, flagCh)} and rule out anyone falsified by appearing in ${chLabel(sc, clearCh)}.`;
+        return `Chart rule-out: start with patients in ${chLabel(sc, flagCh)} and cross off anyone contradicted by appearing in ${chLabel(sc, clearCh)}.`;
       }
       if (meta.id === 'moral-reasoning' || meta.id === 'motivational-reasoning') {
-        return `Duty-of-care filter: prioritize patients in ${chLabel(sc, flagCh)} EXCEPT anyone already accounted for or conflicted in ${chLabel(sc, clearCh)}.`;
+        return `Care priority filter: prioritize patients in ${chLabel(sc, flagCh)} EXCEPT anyone already accounted for or conflicted in ${chLabel(sc, clearCh)}.`;
       }
-      return `Eliminate contraindications: select every patient named in ${chLabel(sc, flagCh)} EXCEPT anyone also named in ${chLabel(sc, clearCh)}.`;
+      return `Contraindication check: select every patient named in ${chLabel(sc, flagCh)} EXCEPT anyone also named in ${chLabel(sc, clearCh)}.`;
     },
     detail({ flagCh, clearCh }, sc) {
       return `Gather every name in ${chLabel(sc, flagCh)}, then cross off anyone appearing on either side of ${chLabel(sc, clearCh)}.`;
@@ -132,12 +132,12 @@ export const REASONING_ENGINES = {
     },
     order({ chA, chB }, sc, meta) {
       if (meta.id === 'syllogistic-reasoning') {
-        return `Syllogism: only patients in ${chLabel(sc, chA)} qualify, and all urgent actions must also appear in ${chLabel(sc, chB)}. Select who meets BOTH premises.`;
+        return `Joint criteria: only patients in ${chLabel(sc, chA)} qualify, and all urgent actions must also appear in ${chLabel(sc, chB)}. Select who meets BOTH criteria.`;
       }
       if (meta.id === 'constraint-based') {
-        return `Simultaneous constraints: select patients satisfying BOTH ${chLabel(sc, chA)} and ${chLabel(sc, chB)} at once.`;
+        return `Dual criteria: select patients satisfying BOTH ${chLabel(sc, chA)} and ${chLabel(sc, chB)} at once.`;
       }
-      return `Converge on the overlap: select ONLY patients who appear in BOTH ${chLabel(sc, chA)} and ${chLabel(sc, chB)}.`;
+      return `Overlap check: select ONLY patients who appear in BOTH ${chLabel(sc, chA)} and ${chLabel(sc, chB)}.`;
     },
     detail({ chA, chB }, sc) {
       return `A patient must appear on either side of ${chLabel(sc, chA)} AND on either side of ${chLabel(sc, chB)}.`;
@@ -174,11 +174,8 @@ export const REASONING_ENGINES = {
       }
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { chA: 'triage', chB: 'imaging' };
     },
-    order({ chA, chB }, sc, meta) {
-      if (meta.id === 'antithetical-reasoning') {
-        return `Antithetical split: select patients on the right side of ${chLabel(sc, chA)} OR ${chLabel(sc, chB)}, but NOT on both.`;
-      }
-      return `Disjunctive rule: select patients on the receiving (right) side of EITHER ${chLabel(sc, chA)} or ${chLabel(sc, chB)}, excluding anyone on both.`;
+    order({ chA, chB }, sc) {
+      return `Exclusive check: select patients on the receiving (right) side of EITHER ${chLabel(sc, chA)} or ${chLabel(sc, chB)}, excluding anyone on both.`;
     },
     detail({ chA, chB }, sc) {
       return `Check the right side of ${chLabel(sc, chA)} and ${chLabel(sc, chB)} — keep exclusive matches only.`;
@@ -212,16 +209,8 @@ export const REASONING_ENGINES = {
       const [thenCh, elseCh] = pickTwoDistinctChannels(rng);
       return { condA, condB, thenCh, elseCh };
     },
-    order({ condA, condB, thenCh, elseCh }, sc, meta) {
-      const prefix =
-        meta.id === 'algorithmic-reasoning'
-          ? 'Clinical algorithm'
-          : meta.id === 'heuristic-reasoning'
-            ? 'Fast triage heuristic'
-            : meta.id === 'pragmatic-reasoning'
-              ? 'Pragmatic rule'
-              : 'Conditional rule';
-      return `${prefix}: IF ${chLabel(sc, condA)} occurred earlier than ${chLabel(sc, condB)}, select right-side patients of ${chLabel(sc, thenCh)}; OTHERWISE select left-side patients of ${chLabel(sc, elseCh)}.`;
+    order({ condA, condB, thenCh, elseCh }, sc) {
+      return `Standing protocol: IF ${chLabel(sc, condA)} occurred earlier than ${chLabel(sc, condB)}, select right-side patients of ${chLabel(sc, thenCh)}; OTHERWISE select left-side patients of ${chLabel(sc, elseCh)}.`;
     },
     detail({ condA, condB }, sc) {
       return `Compare the timestamps of ${chLabel(sc, condA)} and ${chLabel(sc, condB)} first to pick the active branch.`;
@@ -257,16 +246,8 @@ export const REASONING_ENGINES = {
       }
       return pairs.length ? pairs[Math.floor(rng() * pairs.length)] : { fromCh: 'triage', toCh: 'handoff' };
     },
-    order({ fromCh, toCh }, sc, meta) {
-      const lead =
-        meta.id === 'second-order-reasoning'
-          ? 'Second-order effect'
-          : meta.id === 'mechanistic-reasoning'
-            ? 'Mechanistic pathway'
-            : meta.id === 'transitive-reasoning'
-              ? 'Transitive link'
-              : 'Causal chain';
-      return `${lead}: trace A → M in ${chLabel(sc, fromCh)} followed by M → B in ${chLabel(sc, toCh)} (A ≠ B), and select the downstream patient(s) B.`;
+    order({ fromCh, toCh }, sc) {
+      return `Downstream trace: follow A → M in ${chLabel(sc, fromCh)} into M → B in ${chLabel(sc, toCh)} (A ≠ B), and select the downstream patient(s) B.`;
     },
     detail({ fromCh, toCh }, sc) {
       return `Match a right-side patient M in ${chLabel(sc, fromCh)} to the same M on the left side of ${chLabel(sc, toCh)}, then select who M leads to.`;
@@ -303,14 +284,8 @@ export const REASONING_ENGINES = {
       }
       return pairs.length ? pairs[Math.floor(rng() * pairs.length)] : { fromCh: 'labs', toCh: 'consult' };
     },
-    order({ fromCh, toCh }, sc, meta) {
-      const lead =
-        meta.id === 'forensic-reasoning'
-          ? 'Forensic reconstruction'
-          : meta.id === 'root-cause-analysis'
-            ? 'Root-cause trace'
-            : 'Reverse trace';
-      return `${lead}: work backward from ${chLabel(sc, toCh)} into ${chLabel(sc, fromCh)} (A → M → B, A ≠ B) and select the ORIGIN patient(s) A.`;
+    order({ fromCh, toCh }, sc) {
+      return `Source trace: work backward from ${chLabel(sc, toCh)} into ${chLabel(sc, fromCh)} (A → M → B, A ≠ B) and select the ORIGIN patient(s) A.`;
     },
     detail({ fromCh, toCh }, sc) {
       return `Find M appearing on the left of ${chLabel(sc, toCh)} and the right of ${chLabel(sc, fromCh)}, then select the initiating patient A on the left of ${chLabel(sc, fromCh)}.`;
@@ -347,14 +322,8 @@ export const REASONING_ENGINES = {
       }
       return pairs.length ? pairs[Math.floor(rng() * pairs.length)] : { chA: 'vitals', chB: 'consult' };
     },
-    order({ chA, chB }, sc, meta) {
-      if (meta.id === 'interpersonal-reasoning') {
-        return `Interpersonal liaison: find the middle person M who receives from ${chLabel(sc, chA)} and passes onward in ${chLabel(sc, chB)} (A → M → B, A ≠ B).`;
-      }
-      if (meta.id === 'decompositional-reasoning') {
-        return `Decompose the two-step path (${chLabel(sc, chA)} then ${chLabel(sc, chB)}) to isolate the shared connector patient M in the middle.`;
-      }
-      return `Abductive bridge: infer the single hidden patient M connecting ${chLabel(sc, chA)} (on its right) into ${chLabel(sc, chB)} (on its left), with distinct ends.`;
+    order({ chA, chB }, sc) {
+      return `Connector check: find the middle patient M who sits on the right side of ${chLabel(sc, chA)} and the left side of ${chLabel(sc, chB)} (A → M → B, A ≠ B).`;
     },
     detail({ chA, chB }, sc) {
       return `Look for A → M in ${chLabel(sc, chA)} paired with M → B in ${chLabel(sc, chB)} (A ≠ B), and select M.`;
@@ -393,14 +362,8 @@ export const REASONING_ENGINES = {
       }
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { seedCh: 'triage' };
     },
-    order({ seedCh }, sc, meta) {
-      const lead =
-        meta.id === 'systems-reasoning'
-          ? 'Systems ripple'
-          : meta.id === 'emergent-reasoning'
-            ? 'Emergent spillover'
-            : 'Recursive step';
-      return `${lead}: start with right-side patients of ${chLabel(sc, seedCh)} (Wave 1); then re-apply the arrows across all other records to find NEW Wave-2 patients they point to.`;
+    order({ seedCh }, sc) {
+      return `Escalation wave: start with right-side patients of ${chLabel(sc, seedCh)} (Wave 1); then follow arrows across all other records to find NEW Wave-2 patients they point to.`;
     },
     detail({ seedCh }, sc) {
       return `List Wave 1 (right side of ${chLabel(sc, seedCh)}), then select patients outside Wave 1 who receive an arrow from any Wave-1 patient in another record.`;
@@ -431,15 +394,9 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { role: rng() < 0.5 ? 'to' : 'from' };
     },
-    order({ role }, _sc, meta) {
+    order({ role }) {
       const side = role === 'to' ? 'receiving (right)' : 'initiating (left)';
-      if (meta.id === 'anomalous-reasoning') {
-        return `Spot the anomaly: select the outlier patient(s) who appear MORE times on the ${side} side across all 6 records than anyone else.`;
-      }
-      if (meta.id === 'statistical-reasoning') {
-        return `Distribution peak: count ${side}-side entries per patient across all 6 records and select everyone tied for the MAXIMUM count.`;
-      }
-      return `Inductive pattern: generalize across all 6 records and select the patient(s) tied for the highest number of ${side}-side entries.`;
+      return `Ward frequency check: count ${side}-side entries per patient across all 6 records and select everyone tied for the MAXIMUM count.`;
     },
     detail({ role }) {
       return `Tally how many arrows ${role === 'to' ? 'point to (right)' : 'start from (left)'} each patient across the whole board; select the highest-count patient(s).`;
@@ -491,19 +448,11 @@ export const REASONING_ENGINES = {
       // Fallback: patients pulled in opposite directions (left in Unit 0 AND right in Unit 1)
       return { mode: 'cross-invert', unitA: 0, unitB: 1 };
     },
-    order(params, sc, meta) {
-      const lead =
-        meta.id === 'dialectical-reasoning'
-          ? 'Dialectical tension'
-          : meta.id === 'adversarial-reasoning'
-            ? 'Adversarial clash'
-            : meta.id === 'antinomic-reasoning'
-              ? 'Antinomic pair'
-              : 'Direct contradiction';
+    order(params, sc) {
       if (params.mode === 'opposing') {
-        return `${lead}: find any two patients who directly invert each other across two records (A → B in one record, and B → A in another). Select both.`;
+        return `Chart clash audit: find any two patients who directly invert each other across two records (A → B in one record, and B → A in another). Select both.`;
       }
-      return `${lead}: find patients whose clinical role flips between units—appearing on the LEFT side in ${sc.sites[0]} AND on the RIGHT side in ${sc.sites[1]}.`;
+      return `Chart clash audit: find patients whose clinical role flips between units—appearing on the LEFT side in ${sc.sites[0]} AND on the RIGHT side in ${sc.sites[1]}.`;
     },
     detail(params, sc) {
       if (params.mode === 'opposing') {
@@ -555,15 +504,9 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { sourceSite: rng() < 0.5 ? 0 : 1 };
     },
-    order({ sourceSite }, sc, meta) {
+    order({ sourceSite }, sc) {
       const otherSite = 1 - sourceSite;
-      const lead =
-        meta.id === 'cross-domain-reasoning'
-          ? 'Cross-domain transfer'
-          : meta.id === 'analogical-abstraction'
-            ? 'Analogical abstraction'
-            : 'Structural analogy';
-      return `${lead}: inspect ${sc.sites[sourceSite]} first—is its EARLIEST record heavier (higher Weight) than its LATEST record? Transfer that exact temporal pattern to ${sc.sites[otherSite]} (pick right-side patients of ${sc.sites[otherSite]}'s EARLIEST record if front-loaded, or LATEST record if escalating).`;
+      return `Unit pattern match: inspect ${sc.sites[sourceSite]} first—is its EARLIEST record heavier (higher Weight) than its LATEST record? Apply that exact timing pattern to ${sc.sites[otherSite]} (pick right-side patients of ${sc.sites[otherSite]}'s EARLIEST record if front-loaded, or LATEST record if escalating).`;
     },
     detail({ sourceSite }, sc) {
       return `Compare Weight of ${sc.sites[sourceSite]}'s earliest vs latest record (front-loaded vs escalating), then select right-side patients of the matching earliest or latest record in ${sc.sites[1 - sourceSite]}.`;
@@ -603,9 +546,8 @@ export const REASONING_ENGINES = {
     pickParams() {
       return {};
     },
-    order(_params, _sc, meta) {
-      const lead = meta.id === 'ontological-reasoning' ? 'Ontological category test' : 'Higher-order relation';
-      return `${lead}: compare the two EARLIEST records (01:00 and 02:00). If they share the SAME Unit, select right-side patients of 01:00; if they are in DIFFERENT Units, select right-side patients of 02:00.`;
+    order() {
+      return `Opening-unit check: compare the two EARLIEST records (01:00 and 02:00). If they share the SAME Unit, select right-side patients of 01:00; if they are in DIFFERENT Units, select right-side patients of 02:00.`;
     },
     detail() {
       return `First evaluate the relationship between the 01:00 and 02:00 records (same Unit vs different Units), then select from the resulting record.`;
@@ -637,11 +579,10 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { dir: rng() < 0.5 ? 'top' : 'bottom' };
     },
-    order({ dir }, _sc, meta) {
-      const lead = meta.id === 'first-principles' ? 'First-principles root' : 'Hierarchical tier';
+    order({ dir }) {
       return dir === 'top'
-        ? `${lead}: find pure top-level initiators—patients who appear on the LEFT side at least once, and NEVER on the right side anywhere on the board.`
-        : `${lead}: find pure terminal recipients—patients who appear on the RIGHT side at least once, and NEVER on the left side anywhere on the board.`;
+        ? `Ward role scan: find pure initiators—patients who appear on the LEFT side at least once, and NEVER on the right side anywhere on the board.`
+        : `Ward role scan: find pure recipients—patients who appear on the RIGHT side at least once, and NEVER on the left side anywhere on the board.`;
     },
     detail({ dir }) {
       return dir === 'top'
@@ -679,10 +620,9 @@ export const REASONING_ENGINES = {
       const row = rng() < 0.5 ? 'upper' : 'lower';
       return { ch, row };
     },
-    order({ ch, row }, sc, meta) {
+    order({ ch, row }, sc) {
       const rowLabel = row === 'upper' ? 'UPPER Resuscitation Row (Bays 1–5)' : 'LOWER Intake Row (Bays 6–10)';
-      const lead = meta.id === 'lateral-reasoning' ? 'Lateral floor check' : 'Spatial ward mapping';
-      return `${lead}: look at the physical monitor layout and select every patient named in ${chLabel(sc, ch)} who occupies the ${rowLabel}.`;
+      return `Ward floor check: look at the physical monitor layout and select every patient named in ${chLabel(sc, ch)} who occupies the ${rowLabel}.`;
     },
     detail({ ch, row }, sc) {
       return `Check ${chLabel(sc, ch)}, then look up at the bay numbers on the ward monitor—keep only patients in ${row === 'upper' ? 'Bays 1–5 (Nadia–Maren)' : 'Bays 6–10 (Tomas–Rory)'}.`;
@@ -710,10 +650,9 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { which: rng() < 0.5 ? 'earliest' : 'latest', side: rng() < 0.5 ? 'from' : 'to' };
     },
-    order({ which, side }, _sc, meta) {
+    order({ which, side }) {
       const clock = which === 'earliest' ? 'EARLIEST record (01:00)' : 'LATEST record (06:00)';
-      const lead = meta.id === 'extrapolative-reasoning' ? 'Trend extrapolation' : 'Chronological anchor';
-      return `${lead}: locate the ${clock} and select the patients on its ${side === 'from' ? 'initiating (left)' : 'receiving (right)'} side.`;
+      return `Timeline check: locate the ${clock} and select the patients on its ${side === 'from' ? 'initiating (left)' : 'receiving (right)'} side.`;
     },
     detail({ which }) {
       return `Sort by the Time column first—the ${which === 'earliest' ? '01:00 opening baseline' : '06:00 latest update'} governs this call.`;
@@ -761,17 +700,11 @@ export const REASONING_ENGINES = {
       const [chA, chB] = pickTwoDistinctChannels(rng);
       return { chA, chB, compareOnly: true };
     },
-    order(params, sc, meta) {
-      const lead =
-        meta.id === 'prognostic-reasoning'
-          ? 'Prognostic trajectory'
-          : meta.id === 'narrative-reasoning'
-            ? 'Chronological narrative'
-            : 'Predictive trajectory';
+    order(params, sc) {
       if (params.compareOnly) {
-        return `${lead}: compare ${chLabel(sc, params.chA)} and ${chLabel(sc, params.chB)} — select right-side patients from whichever occurred LATER.`;
+        return `Progression check: compare ${chLabel(sc, params.chA)} and ${chLabel(sc, params.chB)} — select right-side patients from whichever occurred LATER.`;
       }
-      return `${lead}: trace a strictly forward-in-time chain from ${chLabel(sc, params.chA)} into ${chLabel(sc, params.chB)} (A → M → B, A ≠ B) and select the next affected patient(s) B.`;
+      return `Progression check: trace a strictly forward-in-time chain from ${chLabel(sc, params.chA)} into ${chLabel(sc, params.chB)} (A → M → B, A ≠ B) and select the next affected patient(s) B.`;
     },
     detail(params, sc) {
       if (params.compareOnly) {
@@ -830,20 +763,8 @@ export const REASONING_ENGINES = {
       }
       return { threshold: 5 };
     },
-    order({ threshold }, _sc, meta) {
-      if (meta.id === 'bayesian-reasoning') {
-        return `Bayesian update: add the Weight (+1 to +6) of every record where a patient appears on the receiving (right) side. Intervene for patients reaching posterior score ≥ ${threshold}.`;
-      }
-      if (meta.id === 'proportional-reasoning') {
-        return `Proportional severity: sum each patient's right-side clinical Weights across the chart and select everyone with total magnitude ≥ ${threshold}.`;
-      }
-      if (meta.id === 'optimisation-reasoning' || meta.id === 'decision-theoretic') {
-        return `Optimal expected utility: sum each patient's right-side clinical Weights and allocate care to everyone at or above threshold ${threshold}.`;
-      }
-      if (meta.id === 'risk-based-reasoning') {
-        return `Risk triage: sum the Risk Weights on every record pointing to each patient (right side) and treat everyone with combined risk ≥ ${threshold}.`;
-      }
-      return `Quantitative score: sum the Weight column of every record where a patient appears on the right side; select everyone scoring ≥ ${threshold}.`;
+    order({ threshold }) {
+      return `Acuity tally: add the Weight (+1 to +6) of every record where a patient appears on the receiving (right) side, and treat everyone totaling ≥ ${threshold}.`;
     },
     detail({ threshold }) {
       return `Look at the Weight (+1..+6) beside each record. Add the weights of all records pointing to a patient (right side) — act if total ≥ ${threshold}.`;
@@ -886,9 +807,8 @@ export const REASONING_ENGINES = {
       }
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { keyCh: 'vitals' };
     },
-    order({ keyCh }, sc, meta) {
-      const lead = meta.id === 'hypothetical-reasoning' ? 'Hypothetical removal' : 'Counterfactual ("but-for") test';
-      return `${lead}: if ${chLabel(sc, keyCh)} had NEVER run, which of its right-side patients would have ZERO other right-side flags anywhere on the board?`;
+    order({ keyCh }, sc) {
+      return `Single-source check: if ${chLabel(sc, keyCh)} had NEVER run, which of its right-side patients would have ZERO other right-side flags anywhere on the board?`;
     },
     detail({ keyCh }, sc) {
       return `Check every right-side patient in ${chLabel(sc, keyCh)} and eliminate anyone who also appears on the right side of another record.`;
@@ -912,15 +832,9 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { role: rng() < 0.5 ? 'to' : 'from' };
     },
-    order({ role }, _sc, meta) {
+    order({ role }) {
       const side = role === 'to' ? 'receiving (right)' : 'initiating (left)';
-      const lead =
-        meta.id === 'differential-diagnosis'
-          ? 'Differential confirmation'
-          : meta.id === 'synthetic-reasoning'
-            ? 'Synthetic integration'
-            : 'Evidential corroboration';
-      return `${lead}: select every patient confirmed on the ${side} side by at least TWO DIFFERENT records with DIFFERENT clinical partners.`;
+      return `Independent confirmation: select every patient confirmed on the ${side} side by at least TWO DIFFERENT records with DIFFERENT clinical partners.`;
     },
     detail({ role }) {
       return `Require two separate records on the ${role === 'to' ? 'right' : 'left'} side paired with two distinct partners (identical partner echoes do not count).`;
@@ -955,9 +869,8 @@ export const REASONING_ENGINES = {
       const [taintedCh, trustedCh] = pickTwoDistinctChannels(rng);
       return { taintedCh, trustedCh };
     },
-    order({ taintedCh, trustedCh }, sc, meta) {
-      const lead = meta.id === 'critical-reasoning' ? 'Critical audit' : 'Epistemic quarantine';
-      return `${lead}: ${chLabel(sc, taintedCh)} is compromised—quarantine anyone named in it. Act on right-side patients of ${chLabel(sc, trustedCh)} who stay uncontaminated.`;
+    order({ taintedCh, trustedCh }, sc) {
+      return `Record quarantine: ${chLabel(sc, taintedCh)} is compromised—set aside anyone named in it. Act on right-side patients of ${chLabel(sc, trustedCh)} who stay uncontaminated.`;
     },
     detail({ taintedCh, trustedCh }, sc) {
       return `Discard anyone appearing on either side of compromised ${chLabel(sc, taintedCh)}; keep clean right-side patients of ${chLabel(sc, trustedCh)}.`;
@@ -983,15 +896,9 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { side: rng() < 0.5 ? 'to' : 'from' };
     },
-    order({ side }, _sc, meta) {
+    order({ side }) {
       const sideText = side === 'to' ? 'right' : 'left';
-      const lead =
-        meta.id === 'reflective-reasoning'
-          ? 'Reflective audit'
-          : meta.id === 'hypothetico-deductive'
-            ? 'Hypothesis test & revision'
-            : 'Non-monotonic revision';
-      return `${lead}: form an initial list from the ${sideText} side of the 01:00 and 02:00 records, then WITHDRAW anyone contradicted by appearing anywhere in the 05:00 or 06:00 records.`;
+      return `Updated chart review: form an initial list from the ${sideText} side of the 01:00 and 02:00 records, then WITHDRAW anyone contradicted by appearing anywhere in the 05:00 or 06:00 records.`;
     },
     detail({ side }) {
       return `Take provisional candidates from 01:00–02:00 (${side} side), then retract anyone who shows up in the later 05:00–06:00 evidence.`;
@@ -1026,14 +933,8 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { rivalSite: rng() < 0.5 ? 0 : 1 };
     },
-    order({ rivalSite }, sc, meta) {
-      const lead =
-        meta.id === 'game-theoretic-reasoning'
-          ? 'Game-theoretic allocation'
-          : meta.id === 'perspectival-reasoning'
-            ? 'Dual-perspective review'
-            : 'Strategic triage';
-      return `${lead}: another surgical team automatically covers every patient in the EARLIEST record of ${sc.sites[rivalSite]}. Cover the right-side patients of the EARLIEST record of ${sc.sites[1 - rivalSite]} NOT already taken by that team.`;
+    order({ rivalSite }, sc) {
+      return `Multi-team coordination: another surgical team automatically covers every patient in the EARLIEST record of ${sc.sites[rivalSite]}. Cover the right-side patients of the EARLIEST record of ${sc.sites[1 - rivalSite]} NOT already taken by that team.`;
     },
     detail({ rivalSite }, sc) {
       return `Find who the other team takes (earliest record in ${sc.sites[rivalSite]}), then pick uncovered right-side patients from the earliest record in ${sc.sites[1 - rivalSite]}.`;
@@ -1074,12 +975,12 @@ export const REASONING_ENGINES = {
     },
     order({ chA, chB }, sc, meta) {
       if (meta.id === 'ethical-reasoning') {
-        return `Ethical precedence: between ${chLabel(sc, chA)} and ${chLabel(sc, chB)}, the MORE RECENT record supersedes the older directive. Select the right-side patients of the later record.`;
+        return `Superseding directive: between ${chLabel(sc, chA)} and ${chLabel(sc, chB)}, the MORE RECENT record overrides the older directive. Select the right-side patients of the later record.`;
       }
       if (meta.id === 'mentalistic-reasoning') {
-        return `Mental-state check: families briefed earlier may hold outdated assumptions—select the right-side patients of whichever of ${chLabel(sc, chA)} or ${chLabel(sc, chB)} was updated MORE RECENTLY.`;
+        return `Family update check: families briefed earlier may hold outdated assumptions—select the right-side patients of whichever of ${chLabel(sc, chA)} or ${chLabel(sc, chB)} was updated MORE RECENTLY.`;
       }
-      return `Semantic precision: compare ${chLabel(sc, chA)} and ${chLabel(sc, chB)}—select the exact receiving (right-side) patients named in the LATER record.`;
+      return `Latest-record call: compare ${chLabel(sc, chA)} and ${chLabel(sc, chB)}—select the receiving (right-side) patients named in the LATER record.`;
     },
     detail({ chA, chB }, sc) {
       return `Compare timestamps on ${chLabel(sc, chA)} and ${chLabel(sc, chB)}; follow the later record's receiving (right) side.`;
@@ -1105,15 +1006,9 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { role: rng() < 0.5 ? 'to' : 'from' };
     },
-    order({ role }, sc, meta) {
+    order({ role }, sc) {
       const side = role === 'to' ? 'receiving (right)' : 'initiating (left)';
-      const lead =
-        meta.id === 'divergent-reasoning'
-          ? 'Divergent scan'
-          : meta.id === 'generative-reasoning'
-            ? 'Generative synthesis'
-            : 'Combinatorial match';
-      return `${lead}: find every patient who appears on the ${side} side in BOTH ${sc.sites[0]} AND ${sc.sites[1]}.`;
+      return `Cross-unit overlap: find every patient who appears on the ${side} side in BOTH ${sc.sites[0]} AND ${sc.sites[1]}.`;
     },
     detail(_, sc) {
       return `Combine across both units: a patient must appear on that side in at least one ${sc.sites[0]} record and at least one ${sc.sites[1]} record.`;
@@ -1147,7 +1042,7 @@ export const REASONING_ENGINES = {
       return { siteIdx: rng() < 0.5 ? 0 : 1 };
     },
     order({ siteIdx }, sc) {
-      return `Contextual scope (${sc.sites[siteIdx]} ONLY): select every patient appearing in at least TWO records tagged ${sc.sites[siteIdx]}.`;
+      return `Unit-only review (${sc.sites[siteIdx]} ONLY): select every patient appearing in at least TWO records tagged ${sc.sites[siteIdx]}.`;
     },
     detail({ siteIdx }, sc) {
       return `Ignore ${sc.sites[1 - siteIdx]} entirely—count only records inside ${sc.sites[siteIdx]}.`;
@@ -1184,9 +1079,8 @@ export const REASONING_ENGINES = {
     pickParams(rng) {
       return { siteIdx: rng() < 0.5 ? 0 : 1 };
     },
-    order({ siteIdx }, sc, meta) {
-      const lead = meta.id === 'abstract-reasoning' ? 'Abstract role extraction' : 'Structural pivot';
-      return `${lead}: inside ${sc.sites[siteIdx]} ONLY, select every patient who acts as BOTH initiator (left) AND recipient (right).`;
+    order({ siteIdx }, sc) {
+      return `Dual-role check: inside ${sc.sites[siteIdx]} ONLY, select every patient who acts as BOTH initiator (left) AND recipient (right).`;
     },
     detail({ siteIdx }, sc) {
       return `Look strictly at ${sc.sites[siteIdx]} records—find anyone who appears at least once on the left and at least once on the right.`;
@@ -1221,12 +1115,11 @@ export const REASONING_ENGINES = {
       const [chA, chB] = pickTwoDistinctChannels(rng);
       return { chA, chB };
     },
-    order({ chA, chB }, sc, meta) {
-      const lead = meta.id === 'integrative-reasoning' ? 'Integrative orchestration' : 'Meta-reasoning method check';
-      return `${lead}: FIRST inspect 01:00. If 01:00 is in ${sc.sites[0]}, use ELIMINATION (in ${chLabel(sc, chA)} except ${chLabel(sc, chB)}); if 01:00 is in ${sc.sites[1]}, use CHRONOLOGICAL BASELINE (right side of 01:00).`;
+    order({ chA, chB }, sc) {
+      return `Protocol selector: FIRST inspect 01:00. If 01:00 is in ${sc.sites[0]}, select patients in ${chLabel(sc, chA)} EXCEPT ${chLabel(sc, chB)}; if 01:00 is in ${sc.sites[1]}, select the right side of 01:00.`;
     },
-    detail({ chA, chB }, sc) {
-      return `Decide which reasoning strategy fits the ward's opening condition (01:00's Unit), then execute that exact method.`;
+    detail() {
+      return `Check 01:00's Unit first to determine which ward protocol governs this shift, then apply that exact rule.`;
     },
     evaluate(graph, { chA, chB }) {
       const earliest = graph.records.find((r) => r.timeRank === 0);
@@ -1281,10 +1174,10 @@ export const REASONING_ENGINES = {
         : { ruleOutCh: 'labs', threshold: 5 };
     },
     order({ ruleOutCh, threshold }, sc) {
-      return `Differential synthesis: FIRST rule out everyone named in ${chLabel(sc, ruleOutCh)}; among the remaining patients, sum right-side Weights and intervene for anyone reaching ≥ ${threshold}.`;
+      return `Two-step workup: FIRST rule out everyone named in ${chLabel(sc, ruleOutCh)}; among the remaining patients, sum right-side Weights and intervene for anyone reaching ≥ ${threshold}.`;
     },
     detail({ ruleOutCh, threshold }, sc) {
-      return `Two-stage differential: eliminate any patient appearing in ${chLabel(sc, ruleOutCh)}, then confirm survivors whose right-side Weight total is ≥ ${threshold}.`;
+      return `Eliminate any patient appearing in ${chLabel(sc, ruleOutCh)}, then confirm survivors whose right-side Weight total is ≥ ${threshold}.`;
     },
     evaluate(graph, { ruleOutCh, threshold }) {
       const excluded = new Set(graph.patientsIn(ruleOutCh));
@@ -1347,10 +1240,10 @@ export const REASONING_ENGINES = {
       return { threshold: 6 };
     },
     order({ threshold }) {
-      return `Bayesian update: start with each patient's PRIOR (right-side Weight in 01:00–02:00), then UPDATE with new evidence (right-side Weight in 03:00–06:00). Act if Posterior ≥ ${threshold}.`;
+      return `Baseline & update: start with each patient's opening acuity (right-side Weight in 01:00–02:00), then add new findings (right-side Weight in 03:00–06:00). Act if updated total ≥ ${threshold}.`;
     },
     detail({ threshold }) {
-      return `Posterior = Prior (01:00–02:00) + New Evidence (03:00–06:00) on the right side. Don't anchor on the early prior alone—act when updated Posterior ≥ ${threshold}.`;
+      return `Combine early baseline (01:00–02:00) + newer findings (03:00–06:00) on the right side. Don't anchor on early readings alone—act when updated total ≥ ${threshold}.`;
     },
     evaluate(graph, { threshold }) {
       return uniqueSorted(
@@ -1400,7 +1293,7 @@ export const REASONING_ENGINES = {
       return { ratio: 2 };
     },
     order() {
-      return `Proportional triage: inspect Severity Weight (+1..+6) vs Procedure Time (1m..6m). Select right-side patients ONLY from records where Severity is at least DOUBLE the Minutes (Weight ≥ 2 × Min).`;
+      return `Severity-to-time check: inspect Severity Weight (+1..+6) vs Procedure Time (1m..6m). Select right-side patients ONLY from records where Severity is at least DOUBLE the Minutes (Weight ≥ 2 × Min).`;
     },
     detail() {
       return `Compare Weight to Minutes on each row (e.g. +4 in 2m = 2× qualifies; +5 in 3m = 1.67× does not). Select right-side patients of qualifying rows.`;
@@ -1437,7 +1330,7 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Time-budget optimisation: minutes are scarce—find the single record(s) with the HIGHEST Severity-per-Minute rate (Weight ÷ Min) and attend to their right-side patients first.`;
+      return `Time-budget call: minutes are scarce—find the single record(s) with the HIGHEST Severity-per-Minute rate (Weight ÷ Min) and attend to their right-side patients first.`;
     },
     detail() {
       return `Divide Weight by Minutes for each row (e.g. +5 in 1m = 5.0/min beats +6 in 2m = 3.0/min). Act on the highest-yield record(s).`;
@@ -1483,7 +1376,7 @@ export const REASONING_ENGINES = {
       return { minGain: 2 };
     },
     order({ minGain }) {
-      return `Decision-theoretic utility: compute Net Gain = Weight − Minutes for every row. Intervene for right-side patients in every record with Net Gain ≥ +${minGain}.`;
+      return `Net benefit call: compute Net Gain = Weight − Minutes for every row. Intervene for right-side patients in every record with Net Gain ≥ +${minGain}.`;
     },
     detail({ minGain }) {
       return `Subtract procedure Minutes from Severity Weight on each row; select right-side patients where (Weight − Min) ≥ +${minGain}.`;
@@ -1531,7 +1424,7 @@ export const REASONING_ENGINES = {
       return { threshold: 6 };
     },
     order({ threshold }) {
-      return `Risk = Likelihood × Harm: for each patient, multiply their number of right-side flags by the HIGHEST Weight among those flags. Intervene if Risk ≥ ${threshold}.`;
+      return `Combined exposure check: for each patient, multiply their number of right-side flags by the HIGHEST Weight among those flags. Intervene if total ≥ ${threshold}.`;
     },
     detail({ threshold }) {
       return `Count how many right-side flags a patient has, multiply by their single heaviest Weight (e.g. 2 flags × max +5 = 10), and act if ≥ ${threshold}.`;
@@ -1584,7 +1477,7 @@ export const REASONING_ENGINES = {
       return { threshold: 5 };
     },
     order({ threshold }) {
-      return `Mathematical net balance: add (+Weight) for each RIGHT-side appearance and subtract (−Weight) for each LEFT-side appearance. Select everyone with Net Balance ≥ +${threshold}.`;
+      return `Net severity balance: add (+Weight) for each RIGHT-side appearance and subtract (−Weight) for each LEFT-side appearance. Select everyone with Net Balance ≥ +${threshold}.`;
     },
     detail({ threshold }) {
       return `Compute Net = (sum of right-side Weights) − (sum of left-side Weights) per patient; select everyone reaching ≥ +${threshold}.`;
@@ -1623,10 +1516,10 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Statistical distribution peak: sum each patient's total RIGHT-side Weight across the whole ward and select ONLY the patient(s) tied for the MAXIMUM total.`;
+      return `Peak acuity check: sum each patient's total RIGHT-side Weight across the whole ward and select ONLY the patient(s) tied for the MAXIMUM total.`;
     },
     detail() {
-      return `Compare the full ward distribution of cumulative right-side Weights—act on the statistical peak (highest total score).`;
+      return `Compare cumulative right-side Weights across the ward—act on the patient(s) tied for the highest total.`;
     },
     evaluate(graph) {
       const totals = PATIENT_IDS.map((id) => ({
@@ -1664,7 +1557,7 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `2D spatial ward geometry: check the 5×2 Trauma Monitor above! Find every link (A → B) whose two patients occupy ADJACENT bays (next-door horizontally OR directly across the aisle, e.g. Bay 1↔6), and select the receiving patient B.`;
+      return `Bedside proximity check: check the 5×2 Trauma Monitor above! Find every link (A → B) whose two patients occupy ADJACENT bays (next-door horizontally OR directly across the aisle, e.g. Bay 1↔6), and select the receiving patient B.`;
     },
     detail() {
       return `Bays 1–5 sit on Top Row; Bays 6–10 sit directly below (1↔6, 2↔7, 3↔8, 4↔9, 5↔10). Select B whenever A and B touch on the 5×2 floor grid.`;
@@ -1720,7 +1613,7 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Theory of Mind (belief gap): families briefed on the right side during 01:00–03:00 hold an OUTDATED mental model UNLESS they received a follow-up update anywhere in 05:00–06:00. Select who still needs re-briefing.`;
+      return `Family briefing gap: families briefed on the right side during 01:00–03:00 still hold an OUTDATED picture UNLESS they received a follow-up update anywhere in 05:00–06:00. Select who still needs re-briefing.`;
     },
     detail() {
       return `Gather right-side patients from 01:00, 02:00, and 03:00, then remove anyone who appears on either side of 05:00 or 06:00.`;
@@ -1766,7 +1659,7 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { overrideCh: 'triage' };
     },
     order({ overrideCh }, sc) {
-      return `Ethical duty balance: beneficence flags right-side patients in high-severity records (Weight ≥ +4), EXCEPT patient autonomy in ${chLabel(sc, overrideCh)} overrides escalation. Select who should be escalated.`;
+      return `Escalation & consent check: high-severity records (Weight ≥ +4) flag right-side patients for escalation, EXCEPT wishes logged in ${chLabel(sc, overrideCh)} override escalation. Select who should be escalated.`;
     },
     detail({ overrideCh }, sc) {
       return `Gather right-side patients from records weighted +4, +5, or +6, then honor autonomy by removing anyone named in ${chLabel(sc, overrideCh)}.`;
@@ -1807,7 +1700,7 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { chA: 'triage' };
     },
     order({ chA }, sc) {
-      return `Semantic role shift: select every patient who acts as the SUBJECT (left side) in ${chLabel(sc, chA)} AND appears as the OBJECT (right side) in at least one OTHER record.`;
+      return `Role-switch check: select every patient who acts as the SUBJECT (left side) in ${chLabel(sc, chA)} AND appears as the OBJECT (right side) in at least one OTHER record.`;
     },
     detail({ chA }, sc) {
       return `Read exact sentence roles: find who is the active left-side subject in ${chLabel(sc, chA)}, then verify they receive an action (right side) in a different row.`;
@@ -1851,10 +1744,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { siteIdx: 0, exclCh: 'consult' };
     },
     order({ siteIdx, exclCh }, sc) {
-      return `3-Constraint CSP: select right-side patients satisfying ALL THREE rules at once — (1) Unit is ${sc.sites[siteIdx]}, (2) logged at 02:00 or later, AND (3) NOT named anywhere in ${chLabel(sc, exclCh)}.`;
+      return `Three-rule filter: select right-side patients satisfying ALL THREE rules at once — (1) Unit is ${sc.sites[siteIdx]}, (2) logged at 02:00 or later, AND (3) NOT named anywhere in ${chLabel(sc, exclCh)}.`;
     },
     detail({ siteIdx, exclCh }, sc) {
-      return `Enforce all 3 constraints simultaneously: ${sc.sites[siteIdx]} rows with Time ≥ 02:00 (right side), excluding anyone appearing in ${chLabel(sc, exclCh)}.`;
+      return `Apply all 3 conditions together: ${sc.sites[siteIdx]} rows with Time ≥ 02:00 (right side), excluding anyone appearing in ${chLabel(sc, exclCh)}.`;
     },
     evaluate(graph, { siteIdx, exclCh }) {
       const excl = new Set(graph.patientsIn(exclCh));
@@ -1892,7 +1785,7 @@ export const REASONING_ENGINES = {
       return {};
     },
     order(_params, sc) {
-      return `Inductive generalization: observe the first three records (01:00, 02:00, 03:00) to see which Unit (${sc.sites[0]} or ${sc.sites[1]}) dominates the early shift (2 or 3 of 3). Then select right-side patients of the LATEST record belonging to that dominant Unit.`;
+      return `Early-shift trend: observe the first three records (01:00, 02:00, 03:00) to see which Unit (${sc.sites[0]} or ${sc.sites[1]}) dominates the early shift (2 or 3 of 3). Then select right-side patients of the LATEST record belonging to that dominant Unit.`;
     },
     detail(_params, sc) {
       return `Count ${sc.sites[0]} vs ${sc.sites[1]} in 01:00–03:00 (guaranteed strict majority), then pick right-side patients of that dominant Unit's latest timestamped row.`;
@@ -1943,7 +1836,7 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { anchor: PATIENT_IDS[0] };
     },
     order({ anchor }) {
-      return `Divergent scan around ${pName(anchor)}: explore ALL 6 records broadly and select EVERY patient directly connected to ${pName(anchor)} (on either the left or right side of a link with ${pName(anchor)}).`;
+      return `Contact sweep around ${pName(anchor)}: scan ALL 6 records broadly and select EVERY patient directly connected to ${pName(anchor)} (on either the left or right side of a link with ${pName(anchor)}).`;
     },
     detail({ anchor }) {
       return `Scan every row mentioning ${pName(anchor)}—surface every distinct clinical partner linked directly to ${pName(anchor)}.`;
@@ -1992,7 +1885,7 @@ export const REASONING_ENGINES = {
       return { threshold: 9 };
     },
     order({ threshold }) {
-      return `Combinatorial pairing: find every patient who appears in TWO different records whose combined Weights add up to at least ${threshold} (e.g. +6 and +4 = 10).`;
+      return `Combined record check: find every patient who appears in TWO different records whose combined Weights add up to at least ${threshold} (e.g. +6 and +4 = 10).`;
     },
     detail({ threshold }) {
       return `Check combinations of two records containing the same patient (either side); select anyone with a pair summing to ≥ ${threshold}.`;
@@ -2038,7 +1931,7 @@ export const REASONING_ENGINES = {
       return { minWeight: 3 };
     },
     order({ minWeight }) {
-      return `Moral duty to the vulnerable: select every patient flagged with serious need (right side of a Weight ≥ +${minWeight} record) who NEVER appears on the initiating (left) side of ANY record (unrepresented / vulnerable).`;
+      return `Unrepresented patient priority: select every patient flagged with serious need (right side of a Weight ≥ +${minWeight} record) who NEVER appears on the initiating (left) side of ANY record.`;
     },
     detail({ minWeight }) {
       return `Check right-side patients in records weighted +${minWeight}..+6, then exclude anyone who has at least one left-side entry anywhere on the board.`;
@@ -2074,7 +1967,7 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Fast-and-frugal heuristic: glance ONLY at the fastest 1m record first. IF its Weight is ≥ +3, act on its right-side patients immediately; OTHERWISE jump straight to the heaviest +6 record (right side).`;
+      return `Rapid bedside check: glance ONLY at the fastest 1m record first. IF its Weight is ≥ +3, act on its right-side patients immediately; OTHERWISE jump straight to the heaviest +6 record (right side).`;
     },
     detail() {
       return `Don't sum the whole board: check the 1m row's Weight first (≥ +3 = quick win; < +3 = default to the +6 row's right side).`;
@@ -2122,10 +2015,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { seed: PATIENT_IDS[0] };
     },
     order({ seed }) {
-      return `Second-order consequences from ${pName(seed)}: trace ${pName(seed)} → M (1st-order), then follow M → B across the chart. Ignore ${pName(seed)} and M—intervene for the SECOND-ORDER patients B.`;
+      return `Downstream ripple from ${pName(seed)}: trace ${pName(seed)} → M (step 1), then follow M → B across the chart. Ignore ${pName(seed)} and M—intervene for the 2-step downstream patients B.`;
     },
     detail({ seed }) {
-      return `Find everyone ${pName(seed)} points to (1st-order M), then select NEW patients B whom any M points to (excluding ${pName(seed)} and M themselves).`;
+      return `Find everyone ${pName(seed)} points to (step 1: M), then select NEW patients B whom any M points to (excluding ${pName(seed)} and M themselves).`;
     },
     evaluate(graph, { seed }) {
       const firstOrder = new Set(graph.outEdges(seed).map((e) => e.to));
@@ -2161,7 +2054,7 @@ export const REASONING_ENGINES = {
       return {};
     },
     order(_params, sc) {
-      return `Dialectical synthesis: reconcile Thesis (${sc.sites[0]}) and Antithesis (${sc.sites[1]}) — select every patient who is on the LEFT side in one unit AND on the RIGHT side in the OTHER unit.`;
+      return `Cross-unit role reversal: compare ${sc.sites[0]} and ${sc.sites[1]} — select every patient who is on the LEFT side in one unit AND on the RIGHT side in the OTHER unit.`;
     },
     detail(_params, sc) {
       return `Find patients pulled in opposite directions across units (left in ${sc.sites[0]} + right in ${sc.sites[1]}, OR right in ${sc.sites[0]} + left in ${sc.sites[1]}).`;
@@ -2201,11 +2094,11 @@ export const REASONING_ENGINES = {
     pickParams() {
       return { minWeight: 3 };
     },
-    order({ minWeight }, sc) {
-      return `Integrative capstone: (1) Check which Unit holds 01:00; (2) inside THAT Unit, gather right-side patients from records with Weight ≥ +${minWeight}; (3) EXCLUDE anyone named anywhere in the latest 06:00 record.`;
+    order({ minWeight }) {
+      return `Full-chart call: (1) Check which Unit holds 01:00; (2) inside THAT Unit, gather right-side patients from records with Weight ≥ +${minWeight}; (3) EXCLUDE anyone named anywhere in the latest 06:00 record.`;
     },
     detail({ minWeight }) {
-      return `Coordinate 3 methods at once: scope to 01:00's Unit, keep Weight ≥ +${minWeight} right-side rows, and rule out anyone appearing in 06:00.`;
+      return `Combine 3 checks at once: scope to 01:00's Unit, keep Weight ≥ +${minWeight} right-side rows, and rule out anyone appearing in 06:00.`;
     },
     evaluate(graph, { minWeight }) {
       const first = graph.records.find((r) => r.timeRank === 0);
