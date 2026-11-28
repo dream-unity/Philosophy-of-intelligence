@@ -28,10 +28,11 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
   const levels = new Set(REASONING_TYPE_LIST.map((r) => r.level));
   assert.deepEqual(Array.from(levels).sort(), ['atomic', 'composite', 'meta']);
 
-  // Forbidden graph-algebra gibberish & cryptic medical jargon
+  // Forbidden graph-algebra gibberish, cryptic medical jargon, spoilers & pre-computed math giveaways
   const gibberishRe = /\b(1st-named|2nd-named|endpoints|Severity Weight|right-side|left-side|A\s*→\s*M\s*→\s*B|Unit pathway trace|Decon Wing|Compared \()\b/i;
   const jargonRe = /\b(cmH2O|pneumothorax|hemothorax|tamponade|mediastinum|coagulopathy|vasopressors|angiogram|epiglottitis|rhabdo|hypovolemic|pericardial|acidosis|thoracotomy|myoglobin|troponin|d-dimer|subdural|epidural|ischemia|bradycardia|tachycardia|laparotomy|pneumoperitoneum|ketoacidosis)\b/i;
-  const spoilerRe = /\b(bayesian|syllogis\w*|antinomic|dialectic\w*|abduct\w*|deduct\w*|induct\w*|heuristic\w*|metacognit\w*|meta-reasoning|counterfactual|falsif\w*|ontolog\w*|epistemic|combinatorial|divergen\w*|decision-theoretic|game-theoretic|theory of mind)\b/i;
+  const spoilerRe = /\b(bayesian|syllogis\w*|antinomic|antithes\w*|dialectic\w*|abduct\w*|deduct\w*|induct\w*|heuristic\w*|metacognit\w*|meta-reasoning|counterfactual|falsif\w*|ontolog\w*|epistemic|combinatorial|divergen\w*|converg\w*|decision-theoretic|game-theoretic|theory of mind|transitiv\w*|disjunctiv\w*|recursiv\w*|extrapolat\w*|prognostic|proportional|analog\w*|anomal\w*|first-principles|lateral|emergent|decompos\w*|non-monotonic|perspectiv\w*|pragmatic|synthesi\w*|second-order|algorithm\w*|adversarial|optimis\w*|instrumental|mentalistic|motivational)\b/i;
+  const giveawayRe = /\(\+\d+% gain\)|\(empty in \d+ min\)|→\s*2,150 mL|\(Immediate Red\)|= 54 expected harm|= \+70 net/i;
 
   for (const r of REASONING_TYPE_LIST) {
     assert.equal(typeof SEMANTIC_ENGINES[r.id], 'function', `semantic engine exists for #${r.number} ${r.id}`);
@@ -47,9 +48,20 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
     assert.equal(trial.records.length, 6, `#${r.number} ${r.id} builds 6 cards`);
     assert.ok(trial.records.every((rec) => Array.isArray(rec.shownFacts) && rec.shownFacts.length >= 2), `#${r.number} ${r.id} every card has >= 2 plain-English facts`);
     assert.ok(trial.order.length > 15, `#${r.number} ${r.id} has readable order`);
+    assert.ok(trial.scenario.title && trial.scenario.title.length > 4, `#${r.number} ${r.id} has scenario title`);
+    assert.ok(trial.scenario.dispatch && trial.scenario.dispatch.length > 10, `#${r.number} ${r.id} has scenario dispatch`);
+    assert.ok(trial.detail && trial.detail.length > 10, `#${r.number} ${r.id} has detail hint`);
     assert.ok(trial.explanation.proof.length > 10, `#${r.number} ${r.id} has proof`);
     assert.ok(trial.reasoningMeta.coreOperation.length > 10);
     assert.ok(trial.reasoningMeta.doctorLesson.length > 15);
+
+    // Left-wall bayProfiles coherence: all 10 patients mapped, every target is an active contender (never calm/bystander)
+    assert.ok(trial.bayProfiles && Object.keys(trial.bayProfiles).length === 10, `#${r.number} ${r.id} builds 10 bayProfiles`);
+    for (const t of trial.targets) {
+      assert.equal(trial.bayProfiles[t]?.role, 'contender', `#${r.number} ${r.id} target ${t} must be active contender on left wall`);
+    }
+    const calmBays = Object.values(trial.bayProfiles).filter((bp) => bp.role !== 'contender');
+    assert.ok(calmBays.length >= 2, `#${r.number} ${r.id} keeps uninvolved/minor bays calm on left wall (got ${calmBays.length})`);
 
     const visibleBoardText = [
       trial.scenario.title,
@@ -61,6 +73,7 @@ test('Trauma Doctor: complete 80-type semantic clinical board spans 8 families, 
 
     assert.ok(!gibberishRe.test(visibleBoardText), `ZERO graph gibberish in #${r.number} ${r.id}: ${visibleBoardText.slice(0, 200)}`);
     assert.ok(!jargonRe.test(visibleBoardText), `ZERO dense medical jargon in #${r.number} ${r.id}`);
+    assert.ok(!giveawayRe.test(visibleBoardText), `ZERO pre-computed math giveaways in #${r.number} ${r.id}`);
     assert.ok(!spoilerRe.test(trial.order), `active directive must not spoil reasoning type #${r.number} ${r.id}: ${trial.order}`);
     assert.ok(!/\*[a-zA-Z]+\*/.test(visibleBoardText), `no raw markdown italics in #${r.number} ${r.id}`);
 

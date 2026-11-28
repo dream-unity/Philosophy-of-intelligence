@@ -31,8 +31,8 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `2-Move Survival Sequence: you can treat ONE patient at a time. Who MUST you treat FIRST so you still have time to save the others too?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Takes 2 min to stabilize, crashes in 3 min (treating first leaves time for ${D1} & ${D2}).`,
-        `${D1}: Takes 6 min to stabilize, crashes in 10 min (treating first kills ${W} at minute 3).`,
+        `${W}: Takes 2 min to stabilize, crashes in 3 min.`,
+        `${D1}: Takes 6 min to stabilize, crashes in 10 min.`,
         `${D2}: Takes 5 min to stabilize, crashes in 14 min.`,
       ]),
       verdict: winIdx,
@@ -80,11 +80,11 @@ export const NBACK_ENGINES_PART2 = {
   'optimisation-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Hard 10-minute OR budget: maximize total lives saved before the generator shuts down. Which patient MUST be excluded or which single case unlocks the best 2-patient schedule? Pick the 4-min anchor case.`,
+      directive: `Hard 10-minute OR budget before generator shuts down: pick the QUICKEST anchor case that lets you fit 2 lives into 10 minutes.`,
       lines: makeShuffledLines(rng, [
-        `${W}: 4-min procedure (lets us save ${W} + ${D1} in 10 min = 2 lives saved!).`,
-        `${D1}: 6-min procedure (fits with ${W}, cannot fit with ${D2}).`,
-        `${D2}: 10-min procedure (consumes the entire clock for only 1 life saved).`,
+        `${W}: 4-minute surgical repair.`,
+        `${D1}: 6-minute surgical repair.`,
+        `${D2}: 10-minute surgical repair.`,
       ]),
       verdict: winIdx,
       proof: `Anchoring with ${W} (4 min) + ${D1} (6 min) saves 2 lives inside 10 min, beating ${D2}'s lone 10-min case.`,
@@ -133,9 +133,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Expected Harm = (Probability of Arrest × Mortality Impact). Calculate expected harm and act on the HIGHEST risk.`,
       lines: makeShuffledLines(rng, [
-        `${W}: 60% arrest risk × 90 harm index = 54 expected harm.`,
-        `${D1}: 80% complication risk × 25 harm index = 20 expected harm.`,
-        `${D2}: 15% arrest risk × 80 harm index = 12 expected harm.`,
+        `${W}: 60% arrest risk × 90 harm index.`,
+        `${D1}: 80% complication risk × 25 harm index.`,
+        `${D2}: 15% arrest risk × 80 harm index.`,
       ]),
       verdict: winIdx,
       proof: `${W}'s expected harm (54) far outweighs ${D1}'s high-probability minor complication (20) and ${D2}'s low-odds threat (12).`,
@@ -148,14 +148,14 @@ export const NBACK_ENGINES_PART2 = {
   'decision-theoretic': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Net Clinical Utility = (Survival Benefit − Procedure Complication Cost). Select the patient with the HIGHEST positive net utility.`,
+      directive: `Net Clinical Benefit = (Survival Benefit − Procedure Risk). Select the patient with the HIGHEST positive net gain.`,
       lines: makeShuffledLines(rng, [
-        `${W}: +85 survival benefit − 15 procedure risk = +70 net utility.`,
-        `${D1}: +90 survival benefit − 65 procedure risk = +25 net utility.`,
-        `${D2}: +30 survival benefit − 20 procedure risk = +10 net utility.`,
+        `${W}: +85 survival benefit · −15 procedure risk.`,
+        `${D1}: +90 survival benefit · −65 procedure risk.`,
+        `${D2}: +30 survival benefit · −20 procedure risk.`,
       ]),
       verdict: winIdx,
-      proof: `${W} (+70) delivers nearly triple the net clinical utility of ${D1} (+25) and ${D2} (+10).`,
+      proof: `${W} (+70) delivers nearly triple the net clinical benefit of ${D1} (+25) and ${D2} (+10).`,
       rival: `${D1} has a slightly higher raw benefit (+90), but carries severe procedure risk (−65).`,
       isClash: false,
     };
@@ -167,9 +167,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Execute strict ATLS ABCDE order: (1) Fix Airway BEFORE (2) Breathing BEFORE (3) Circulation. Who comes FIRST under this protocol?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Swollen tongue blocking airway (Step A — Airway).`,
-        `${D1}: Broken ribs with shallow breaths, patent airway (Step B — Breathing).`,
-        `${D2}: Leg bleed with clear airway and lungs (Step C — Circulation).`,
+        `${W}: Swollen tongue blocking throat airflow.`,
+        `${D1}: Broken ribs with shallow breaths, throat wide open.`,
+        `${D2}: Leg bleed with clear throat and steady breathing.`,
       ]),
       verdict: winIdx,
       proof: `ATLS executes strictly A → B → C: ${W}'s obstructed Airway precedes ${D1}'s Breathing and ${D2}'s Circulation.`,
@@ -182,11 +182,11 @@ export const NBACK_ENGINES_PART2 = {
   'reverse-reasoning': ({ rng, names, winIdx }) => {
     const { W, D1, D2 } = splitTriad(names, winIdx, rng);
     return {
-      directive: `Work BACKWARDS from the 02:00 medevac takeoff: surgery + recovery takes 40 min. It is now 01:15. Whose operation MUST start this exact minute to make takeoff?`,
+      directive: `Work BACKWARDS from the 02:00 medevac takeoff. It is now 01:15. Whose operation MUST start this exact minute to make takeoff?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Needs 45 min total (01:15 + 45m = 02:00—zero slack left!).`,
-        `${D1}: Needs 20 min total (can start as late as 01:40).`,
-        `${D2}: Needs 15 min total (can start as late as 01:45).`,
+        `${W}: Needs 45 minutes total for surgery and recovery.`,
+        `${D1}: Needs 20 minutes total for surgery and recovery.`,
+        `${D2}: Needs 15 minutes total for surgery and recovery.`,
       ]),
       verdict: winIdx,
       proof: `Working backward from 02:00: ${W} requires 45 min, forcing an immediate 01:15 start with zero buffer.`,
@@ -203,9 +203,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Main pharmacy is locked during lockdown. Who has the MOST viable bedside backup options (3 independent alternatives) so we can improvise immediately?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Bleed can be stopped via tourniquet, wound packing, OR direct femoral compression (3 options).`,
-        `${D1}: Needs one specific rare antidote locked in central pharmacy (0 bedside backups).`,
-        `${D2}: Needs a specialized neuro-coil only in cath lab (1 option).`,
+        `${W}: Bleed can be stopped via tourniquet, wound packing, OR direct femoral pressure.`,
+        `${D1}: Needs one specific rare antidote locked inside central pharmacy.`,
+        `${D2}: Needs one specialized wire coil only available in the cath lab.`,
       ]),
       verdict: winIdx,
       proof: `Divergent scan shows ${W} has 3 immediately workable mechanical alternatives right at the bedside.`,
@@ -322,9 +322,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Split total injury score into Airway + Bleed + Neuro: everyone totals 9 points, but treat the ONLY patient with a single lethal component (≥ 7 in one category).`,
       lines: makeShuffledLines(rng, [
-        `${W}: Total 9 = Airway 8 (Lethal) + Bleed 1 + Neuro 0.`,
-        `${D1}: Total 9 = Airway 3 + Bleed 3 + Neuro 3 (moderate spread).`,
-        `${D2}: Total 9 = Airway 2 + Bleed 4 + Neuro 3 (moderate spread).`,
+        `${W}: Total 9 = Airway 8 + Bleed 1 + Neuro 0.`,
+        `${D1}: Total 9 = Airway 3 + Bleed 3 + Neuro 3.`,
+        `${D2}: Total 9 = Airway 2 + Bleed 4 + Neuro 3.`,
       ]),
       verdict: winIdx,
       proof: `Breaking down the identical total (9) exposes ${W}'s lethal single-organ Airway score of 8.`,
@@ -460,7 +460,7 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `All 3 patients have the EXACT SAME blood pressure (102/64)—read each patient's clinical context to spot who is actually in dangerous relative shock.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Baseline BP is normally 178/104 (chronic hypertension)—102/64 is a massive 76-point shock drop!`,
+        `${W}: Clinic chart shows chronic high blood pressure normally running at 178/104.`,
         `${D1}: 22-year-old marathon runner whose normal resting BP is 100/62.`,
         `${D2}: Healthy dancer whose normal resting BP is 104/64.`,
       ]),
@@ -640,9 +640,9 @@ export const NBACK_ENGINES_PART2 = {
     return {
       directive: `Fast START Mass-Casualty Rule: "Can't walk + Breathing > 30/min → IMMEDIATE RED." Apply this 3-second field rule now.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Non-ambulatory, breathing 36/min (Immediate Red).`,
-        `${D1}: Walking wounded, breathing 22/min (Green Minor).`,
-        `${D2}: Non-ambulatory, breathing 18/min, strong radial pulse, follows commands (Yellow Delayed).`,
+        `${W}: Cannot walk, breathing 36/min.`,
+        `${D1}: Walking around triage, breathing 22/min.`,
+        `${D2}: Cannot walk, breathing 18/min, strong wrist pulse, follows commands.`,
       ]),
       verdict: winIdx,
       proof: `START heuristic tags ${W} Immediate Red instantly (non-ambulatory + RR > 30).`,

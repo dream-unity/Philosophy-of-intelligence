@@ -23,8 +23,9 @@ function patientName(id) {
 }
 
 // Highlight every patient name appearing inside plain-English clinical sentences
-// so hovering/clicking ANY name lights up their ICU bay AND every mention across all 6 cards!
+// and show their bay key number (1–0) so players can instantly locate & act on the left wall!
 const NAME_TO_ID = new Map(PATIENTS.map((p) => [p.name, p.id]));
+const ID_TO_KEY = new Map(PATIENTS.map((p, idx) => [p.id, idx === 9 ? '0' : String(idx + 1)]));
 const NAME_REGEX = new RegExp(`\\b(${PATIENTS.map((p) => p.name).join('|')})\\b`, 'g');
 
 function renderSemanticFactHtml(factObj) {
@@ -32,7 +33,8 @@ function renderSemanticFactHtml(factObj) {
   return escaped.replace(NAME_REGEX, (match) => {
     const pid = NAME_TO_ID.get(match);
     if (!pid) return match;
-    return `<span class="tm-pname" data-pid="${esc(pid)}">${match}</span>`;
+    const keyNum = ID_TO_KEY.get(pid) || '';
+    return `<span class="tm-pname" data-pid="${esc(pid)}"><span class="tm-pname-key">${keyNum}</span>${match}</span>`;
   });
 }
 
@@ -200,10 +202,11 @@ export function renderClinicalDossier(container, {
   // Top Focal Anchor: Active Clinical Directive -> swaps cleanly IN-PLACE to Post-Case Debrief
   let topPanelHtml = '';
   if (!debrief) {
+    const pickWord = remainingSlots === 1 ? '1 matching bay' : `${remainingSlots} matching bays`;
     topPanelHtml = `<section class="tm-order-card" aria-label="Clinical directive">
       <div class="tm-order-main">${esc(trial.order)}</div>
       <div class="tm-order-subrow">
-        <span class="tm-order-detail">${esc(trial.detail)}</span>
+        <span class="tm-order-detail">Click <strong>${pickWord}</strong> on the left wall (or press keys <strong>1–0</strong>) · ${esc(trial.detail)}</span>
         ${shortlistHtml}
       </div>
     </section>`;

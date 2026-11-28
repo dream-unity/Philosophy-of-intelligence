@@ -11,7 +11,7 @@ import {
   getClinicalPhase,
   PHASE_ORDER,
 } from './reasoning-types.js';
-import { synthesizeSemanticLogic, resolveBoard } from './semantic-board.js';
+import { synthesizeSemanticLogic, resolveBoard, buildBayProfiles } from './semantic-board.js';
 import { SEMANTIC_ENGINES_PART1 } from './semantic-engines-1.js';
 import { SEMANTIC_ENGINES_PART2 } from './semantic-engines-2.js';
 
@@ -94,6 +94,12 @@ function tryBuildForType(rng, meta, tier, prevTargetKey, allowSamePrevTarget) {
     decisiveChannels: [],
   };
   const shortlist = buildShortlist(rng, records, logic.trueTargets, explanation.rival?.patientId);
+  const bayProfiles = buildBayProfiles(
+    records,
+    logic.trueTargets,
+    spec.bayLabels || {},
+    spec.bayDefaultLabel || spec.scenarioTitle || spec.scenario?.title || 'Active Eval'
+  );
 
   return {
     meta,
@@ -103,6 +109,7 @@ function tryBuildForType(rng, meta, tier, prevTargetKey, allowSamePrevTarget) {
     logic,
     explanation,
     shortlist,
+    bayProfiles,
   };
 }
 
@@ -181,17 +188,18 @@ export function synthesizeTrial({
         scenario: {
           id: meta.id,
           phase: meta.phase,
-          title: built.spec.scenarioTitle,
-          dispatch: built.spec.dispatch,
+          title: built.spec.scenarioTitle || built.spec.scenario?.title || meta.name,
+          dispatch: built.spec.dispatch || built.spec.scenario?.dispatch || '',
           sites: built.siteNames,
         },
         order: built.spec.order,
-        detail: built.spec.hint,
+        detail: built.spec.hint || built.spec.detail || '',
         records: built.records,
         trueWorldMask: built.logic.trueWorldMask,
         crossChecks: built.logic.crossChecks,
         targets: built.logic.trueTargets,
         shortlist: built.shortlist,
+        bayProfiles: built.bayProfiles,
         explanation: built.explanation,
       };
     }
@@ -225,17 +233,18 @@ export function synthesizeTrial({
     scenario: {
       id: fallbackMeta.id,
       phase: fallbackMeta.phase,
-      title: spec.scenarioTitle,
-      dispatch: spec.dispatch,
+      title: spec.scenarioTitle || spec.scenario?.title || fallbackMeta.name,
+      dispatch: spec.dispatch || spec.scenario?.dispatch || '',
       sites: [...new Set(records.map((r) => r.site))],
     },
     order: spec.order,
-    detail: spec.hint,
+    detail: spec.hint || spec.detail || '',
     records,
     trueWorldMask: 0b111111,
     crossChecks: [],
     targets: safeTargets,
     shortlist: buildShortlist(createRng(seed + 1013), records, safeTargets, explanation.rival?.patientId),
+    bayProfiles: buildBayProfiles(records, safeTargets, spec.bayLabels || {}, spec.bayDefaultLabel || spec.scenarioTitle || spec.scenario?.title || 'Active Eval'),
     explanation,
   };
 }

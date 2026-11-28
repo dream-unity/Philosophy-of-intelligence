@@ -10,7 +10,7 @@ import {
   REASONING_TYPE_LIST,
   getClinicalPhase,
 } from './reasoning-types.js';
-import { PATIENTS, getPatientCondition } from './roster.js';
+import { PATIENTS } from './roster.js';
 import {
   NBACK_DOMAINS,
   NBACK_ENGINES_PART1,
@@ -331,12 +331,21 @@ export class ClinicalNBackStream {
       const remSec = Math.max(24, Math.round(slot.rem * depthScale) + jitter);
       const winSec = Math.max(remSec + 10, Math.round(slot.win * depthScale));
       const progress = Math.max(0.08, Math.min(0.72, 1 - remSec / winSec));
+      const domainStatus = {
+        airway: 'Airway Eval',
+        triage: 'Triage Eval',
+        hemorrhage: 'Bleed Eval',
+        shock: 'Shock Monitor',
+        'neuro-tox': 'Neuro / Tox',
+        'family-ethics': 'Family / Ethics',
+        'autopsy-mm': 'Chart Audit',
+      }[domain.id] || domain.short;
       return {
         index: i,
         id: p.id,
         name: p.name,
         accent: p.accent,
-        condition: getPatientCondition(p.id, phase),
+        condition: domainStatus,
         bpm: Math.round((p.baseBpm || 88) + progress * 44),
         remSec,
         winSec,

@@ -261,40 +261,76 @@ export class TraumaWardScene {
   loadTrial(trial, { useShortlist = false } = {}) {
     const targetSet = new Set(trial.targets);
     const shortlistSet = useShortlist ? new Set(trial.shortlist) : null;
+    const profiles = trial.bayProfiles || null;
     this.timeoutFired = false;
     this.highlightedPatientId = null;
     this.currentPhase = trial.phase || 'before';
     this.rings.length = 0;
     this.popups.length = 0;
 
-    // Shuffle the 10 dramatically varied countdown slots independently across all 10 patients (0% target leakage)
-    const slots = WIDE_COUNTDOWN_SLOTS.map((s) => ({ ...s }));
     let seed = (trial.tierRank * 997 + Math.floor(this.elapsedTime * 1000) + trial.id.length * 131) >>> 0;
     const nextRand = () => {
       seed = (seed * 1664525 + 1013904223) >>> 0;
       return seed / 4294967296;
     };
-    for (let i = slots.length - 1; i > 0; i--) {
-      const j = Math.floor(nextRand() * (i + 1));
-      [slots[i], slots[j]] = [slots[j], slots[i]];
-    }
+    const shuffleLocal = (arr) => {
+      const out = arr.slice();
+      for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(nextRand() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+      }
+      return out;
+    };
 
-    // Give Tiers 4-6 extra time for coupled 2-SAT cross-checks while keeping the full ~90s spread
-    const tierScale = trial.tierRank >= 4 ? 1.42 : 1 - (trial.tierRank - 1) * 0.04;
+    // Dramatically varied countdown slots for active contenders (zero leakage between targets & rivals!)
+    const contenderSlots = shuffleLocal([
+      { rem: 34, win: 68 },
+      { rem: 46, win: 80 },
+      { rem: 58, win: 94 },
+      { rem: 72, win: 108 },
+      { rem: 88, win: 124 },
+      { rem: 106, win: 140 },
+      { rem: 126, win: 162 },
+      { rem: 144, win: 180 },
+      { rem: 158, win: 196 },
+      { rem: 172, win: 210 },
+    ]);
+    const calmSlots = shuffleLocal([
+      { rem: 178, win: 230 },
+      { rem: 194, win: 245 },
+      { rem: 210, win: 260 },
+      { rem: 226, win: 275 },
+      { rem: 242, win: 290 },
+      { rem: 258, win: 305 },
+    ]);
 
-    this.bays.forEach((bay, i) => {
-      const slot = slots[i];
+    // Give Tiers 4-6 extra time for coupled 2-SAT cross-checks while keeping wide spread
+    const tierScale = trial.tierRank >= 4 ? 1.48 : 1.05 - (trial.tierRank - 1) * 0.04;
+    let contenderCursor = 0;
+    let calmCursor = 0;
+
+    this.bays.forEach((bay) => {
+      const prof = profiles ? profiles[bay.patient.id] : null;
+      const role = prof ? prof.role : 'contender';
+      const isContender = role === 'contender';
+      const slot = isContender
+        ? contenderSlots[contenderCursor++ % contenderSlots.length]
+        : calmSlots[calmCursor++ % calmSlots.length];
+
       const jitter = Math.round((nextRand() - 0.5) * 4);
-      const rem = Math.max(20, Math.round(slot.rem * tierScale) + jitter);
-      const win = Math.max(rem + 8, Math.round(slot.win * tierScale));
+      const rem = Math.max(isContender ? 26 : 155, Math.round(slot.rem * tierScale) + jitter);
+      const win = Math.max(rem + 12, Math.round(slot.win * tierScale));
 
-      bay.condition = getPatientCondition(bay.patient.id, this.currentPhase);
+      bay.role = role;
+      bay.condition = prof?.condition || getPatientCondition(bay.patient.id, this.currentPhase);
       bay.isTarget = targetSet.has(bay.patient.id);
       bay.inShortlist = !shortlistSet || shortlistSet.has(bay.patient.id);
       bay.state = 'active';
       bay.remainingSec = rem;
       bay.windowSec = win;
-      bay.progress = Math.max(0.06, Math.min(0.76, 1 - rem / win));
+      bay.progress = isContender
+        ? Math.max(0.08, Math.min(0.68, 1 - rem / win))
+        : Math.max(0.06, Math.min(0.22, 1 - rem / win));
       bay.flashTimer = 0;
       bay.hovered = false;
       bay.ruledOut = false;
@@ -547,21 +583,28 @@ export class TraumaWardScene {
   }
 
   _drawBay(ctx, bay) {
-    const { x, y, w, h, progress, remainingSec, state, hovered, inShortlist, ruledOut } = bay;
+    const { x, y, w, h, progress, remainingSec, state, hovered, inShortlist, ruledOut, role } = bay;
+    const isCalmBay = role === 'bystander' || role === 'stable';
     const isDimmed = state === 'dim' || (this.mode === 'playing' && (!inShortlist || ruledOut));
     const isTallCard = h >= 76 && w >= 136;
 
-    let borderColor = 'rgba(148, 163, 184, 0.22)';
-    let bgFill = '#131d2b';
-    let waveColor = bay.accent;
-    let barColor = '#2dd4bf';
-    const liveBpm = Math.round((bay.patient.baseBpm || 86) + progress * 48);
+    let borderColor = isCalmBay && this.mode === 'playing'
+      ? 'rgba(148, 163, 184, 0.14)'
+      : 'rgba(148, 163, 184, 0.24)';
+    let bgFill = isCalmBay && this.mode === 'playing' ? '#101824' : '#131d2b';
+    let waveColor = isCalmBay && this.mode === 'playing' ? '#475569' : bay.accent;
+    let barColor = isCalmBay && this.mode === 'playing' ? '#334155' : '#2dd4bf';
+    const liveBpm = isCalmBay && this.mode === 'playing'
+      ? Math.round(70 + (bay.index % 4) * 3)
+      : Math.round((bay.patient.baseBpm || 86) + progress * 48);
 
     let topRightText =
       this.mode === 'playing' || isTallCard
-        ? formatCountdown(remainingSec)
+        ? isCalmBay && this.mode === 'playing'
+          ? 'STABLE'
+          : formatCountdown(remainingSec)
         : `${liveBpm} BPM`;
-    let topRightColor = this.mode === 'debrief' ? '#64748b' : '#cbd5e1';
+    let topRightColor = this.mode === 'debrief' || (isCalmBay && this.mode === 'playing') ? '#64748b' : '#cbd5e1';
 
     if (state === 'saved') {
       borderColor = '#2dd4bf';
@@ -598,7 +641,7 @@ export class TraumaWardScene {
       barColor = '#475569';
       topRightText = '✕ OUT';
       topRightColor = '#64748b';
-    } else if (this.mode === 'playing' && (remainingSec <= 15 || progress >= 0.78)) {
+    } else if (!isCalmBay && this.mode === 'playing' && (remainingSec <= 15 || progress >= 0.78)) {
       const pulse = 0.55 + 0.45 * Math.sin(this.elapsedTime * 7);
       borderColor = `rgba(239, 68, 68, ${0.65 + pulse * 0.35})`;
       bgFill = '#22141a';
@@ -606,13 +649,13 @@ export class TraumaWardScene {
       barColor = '#ef4444';
       topRightText = remainingSec <= 0 ? 'CRIT' : formatCountdown(remainingSec);
       topRightColor = '#fca5a5';
-    } else if (this.mode === 'playing' && (remainingSec <= 38 || progress >= 0.52)) {
+    } else if (!isCalmBay && this.mode === 'playing' && (remainingSec <= 38 || progress >= 0.52)) {
       borderColor = 'rgba(245, 158, 11, 0.72)';
       bgFill = '#1c1d22';
       waveColor = '#fbbf24';
       barColor = '#f59e0b';
       topRightColor = '#fcd34d';
-    } else if (this.mode === 'playing' && progress >= 0.34) {
+    } else if (!isCalmBay && this.mode === 'playing' && progress >= 0.34) {
       barColor = '#38bdf8';
       topRightColor = '#bae6fd';
     }

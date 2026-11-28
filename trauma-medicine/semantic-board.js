@@ -96,6 +96,60 @@ export function buildRivalInfo(targets, candidates, reasonFn) {
   };
 }
 
+const CALM_FACT_RE = /\b(cleared to go home|discharged|going home|stitches only|sprained (knee|ankle|wrist)|scraped (both )?knees|mild headache|sunburn|no chest|normal blood pressure|calm, normal|completely safe|not exposed|healthy|no injury|waiting for stitches|minor bruise|routine check|paperwork|completely fine|no bleeding|fully recovered|cleared by|stable enough to wait)\b/i;
+
+/**
+ * Derive a coherent, non-spoiling status profile for all 10 left-wall bays directly
+ * from the active trial's 6 clinical cards so the left wall NEVER contradicts the cards.
+ * - Targets and active clinical contenders all share `role: 'contender'` (zero target leakage)
+ *   and display a case-appropriate clinical label.
+ * - Explicitly minor/cleared patients get `role: 'stable'` with a calm label.
+ * - Patients not involved in the current case get `role: 'bystander'` ('Stable · Obs').
+ */
+export function buildBayProfiles(cards, trueTargets, bayLabels = {}, defaultContenderLabel = 'Active Eval') {
+  const targetSet = new Set(trueTargets || []);
+  const mentioned = new Set();
+  const hasUrgentMention = new Set();
+  const hasCalmMention = new Set();
+
+  for (const c of cards || []) {
+    const allFacts = [...(c.shownFacts || []), ...(c.altFacts || [])];
+    for (const f of allFacts) {
+      for (const pid of f.patients || []) {
+        mentioned.add(pid);
+        const isExplicitCalm = f.calm === true || f.benign === true || f.tag === 'safe' || f.tag === 'benign' || f.tag === 'calm' || CALM_FACT_RE.test(f.text || '');
+        if (isExplicitCalm) {
+          hasCalmMention.add(pid);
+        } else {
+          hasUrgentMention.add(pid);
+        }
+      }
+    }
+  }
+
+  const profiles = {};
+  for (const pid of PATIENT_IDS) {
+    const customLabel = bayLabels && bayLabels[pid] ? bayLabels[pid] : null;
+    if (targetSet.has(pid) || hasUrgentMention.has(pid)) {
+      profiles[pid] = {
+        role: 'contender',
+        condition: customLabel || defaultContenderLabel,
+      };
+    } else if (mentioned.has(pid) && hasCalmMention.has(pid)) {
+      profiles[pid] = {
+        role: 'stable',
+        condition: customLabel || 'Minor · Stable',
+      };
+    } else {
+      profiles[pid] = {
+        role: 'bystander',
+        condition: 'Stable · Monitoring',
+      };
+    }
+  }
+  return profiles;
+}
+
 function truthBit(mask, idx) {
   return Boolean((mask >> idx) & 1);
 }

@@ -286,8 +286,8 @@ body[data-mode="nback"] .tm-dossier {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  flex-wrap: wrap;
-  padding-bottom: 5px;
+  flex-wrap: nowrap;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--border-hairline);
   flex-shrink: 0;
 }
@@ -296,25 +296,33 @@ body[data-mode="nback"] .tm-dossier {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  flex-wrap: wrap;
-  font-size: 12.5px;
+  flex: 1;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
 }
 
 .tm-phase-text {
   font-weight: 700;
   color: var(--accent-teal);
+  flex-shrink: 0;
 }
 
 .tm-scenario-text {
   color: var(--ink-primary);
   font-weight: 650;
+  flex-shrink: 0;
 }
 
 .tm-dispatch-text {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--ink-muted);
   margin-left: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .tm-sep {
@@ -497,8 +505,8 @@ body[data-mode="nback"] .tm-dossier {
 .tm-chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
-  gap: 8px;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 7px;
   flex: 1;
   min-height: 0;
 }
@@ -507,12 +515,70 @@ body[data-mode="nback"] .tm-dossier {
   background: var(--bg-subtle);
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 7px;
-  padding: 9px 11px;
+  padding: 7px 10px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 5px;
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden;
   transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.tm-dossier-body:has(.tm-crosschecks) .tm-chart-grid {
+  gap: 5px;
+}
+
+.tm-dossier-body:has(.tm-crosschecks) .tm-rec-card {
+  padding: 5px 8px;
+  gap: 2px;
+}
+
+.tm-dossier-body:has(.tm-crosschecks) .tm-rec-lines {
+  font-size: 11.5px;
+  line-height: 1.26;
+  gap: 3px;
+}
+
+.tm-dossier-body:has(.tm-crosschecks) .tm-uncertain-note {
+  font-size: 9.75px;
+  line-height: 1.15;
+}
+
+@media (max-width: 1120px) and (min-width: 901px), (max-height: 650px) and (min-width: 901px) {
+  .tm-dossier {
+    padding: 6px 9px;
+    gap: 4px;
+  }
+  .tm-order-card {
+    padding: 6px 9px;
+  }
+  .tm-order-main {
+    font-size: 13px;
+    line-height: 1.28;
+  }
+  .tm-order-detail {
+    font-size: 11px;
+    line-height: 1.24;
+  }
+  .tm-chart-grid {
+    gap: 5px;
+  }
+  .tm-rec-card {
+    padding: 5px 8px;
+    gap: 2px;
+  }
+  .tm-rec-head {
+    font-size: 10.5px;
+  }
+  .tm-rec-label {
+    font-size: 11px;
+  }
+  .tm-rec-lines {
+    font-size: 11.25px;
+    line-height: 1.24;
+    gap: 2px;
+  }
 }
 
 .tm-rec-card.is-disputed {
@@ -639,20 +705,39 @@ body[data-mode="nback"] .tm-dossier {
 
 /* Interactive Patient Name Cross-Highlight & Rule-Out */
 .tm-pname {
-  display: inline;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
   font-weight: 700;
   color: #e2e8f0;
-  background: rgba(56, 189, 248, 0.12);
+  background: rgba(56, 189, 248, 0.13);
   border-radius: 3px;
-  padding: 0 3px;
+  padding: 0 4px 0 2px;
   cursor: pointer;
   transition: background-color 90ms ease, color 90ms ease;
+}
+
+.tm-pname-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  color: #7dd3fc;
+  background: rgba(15, 23, 42, 0.65);
+  border-radius: 2px;
+  padding: 0 3px;
+  line-height: 1.3;
 }
 
 .tm-pname:hover,
 .tm-pname.is-hl {
   background: rgba(45, 212, 191, 0.36);
   color: #f0fdfa;
+}
+
+.tm-pname:hover .tm-pname-key,
+.tm-pname.is-hl .tm-pname-key {
+  background: rgba(15, 23, 42, 0.85);
+  color: #5eead4;
 }
 
 .tm-pname.is-ruled-out {
@@ -1843,6 +1928,16 @@ body[data-mode="nback"] .tm-dossier {
     flex-shrink: 0;
   }
   .tm-dossier {
+    overflow: visible;
+  }
+  .tm-dossier-header {
+    flex-wrap: wrap;
+  }
+  .tm-dossier-meta {
+    white-space: normal;
+    overflow: visible;
+  }
+  .tm-rec-card {
     overflow: visible;
   }
   .tm-cc-list {

@@ -257,9 +257,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Updated risk call: combine each patient's early risk with their new chest scan to treat the HIGHEST updated chance of a torn main chest artery.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Moderate early risk (30%) + emergency chest X-ray shows major swelling around the heart (jumps to ~75%).`,
-        `${D1}: High early risk (60%) + full emergency chest CT scan is 100% normal (drops risk below 2%).`,
-        `${D2}: Low early risk (10%) + normal chest X-ray (drops risk to ~4%).`,
+        `${W}: Moderate early risk (30%) + emergency chest X-ray shows major swelling around the main artery.`,
+        `${D1}: High early risk (60%) + full emergency chest CT scan came back 100% normal.`,
+        `${D2}: Low early risk (10%) + normal chest X-ray.`,
       ]),
       verdict: winIdx,
       proof: `Updating early odds with the new scans puts ${W} (~75%) far above ${D1} (cleared by CT scan) and ${D2} (~4%).`,
@@ -460,9 +460,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Stepwise escalation rule: start with each patient's base score, DOUBLE it once if bleeding, then DOUBLE again if BP < 90. Treat the highest final score.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Base 3 · Active bleeding (×2 → 6) · BP 78/44 < 90 (×2 → 12).`,
-        `${D1}: Base 5 · Active bleeding (×2 → 10) · BP 114/72 (no 2nd doubling → 10).`,
-        `${D2}: Base 4 · No bleeding · BP 84/50 < 90 (×2 → 8).`,
+        `${W}: Base 3 · Active bleeding · BP 78/44.`,
+        `${D1}: Base 5 · Active bleeding · BP 114/72.`,
+        `${D2}: Base 4 · No bleeding · BP 84/50.`,
       ]),
       verdict: winIdx,
       proof: `Applying the doubling step recursively yields ${W} = 12, beating ${D1} = 10 and ${D2} = 8.`,
@@ -609,9 +609,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Compare the DROPS (not just current numbers): treat the patient whose blood pressure fell by the LARGEST gap over the last 10 minutes.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Fell from 138/84 down to 92/58 (a 46-point systolic collapse).`,
-        `${D1}: Fell from 96/60 down to 88/54 (an 8-point systolic dip).`,
-        `${D2}: Fell from 118/72 down to 104/66 (a 14-point systolic dip).`,
+        `${W}: BP fell from 138/84 down to 92/58 in 10 minutes.`,
+        `${D1}: BP fell from 96/60 down to 88/54 in 10 minutes.`,
+        `${D2}: BP fell from 118/72 down to 104/66 in 10 minutes.`,
       ]),
       verdict: winIdx,
       proof: `Comparing the rate-of-change relationships shows ${W}'s 46-point drop vastly exceeds ${D1}'s 8-point dip.`,
@@ -677,9 +677,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Wall oxygen manifold is at Bay 2 and the backup hose only reaches 1 bay away (Bays 1, 2, or 3). Who can be hooked up immediately?`,
       lines: makeShuffledLines(rng, [
-        `${W} is in Bay 3 (immediately adjacent to Bay 2 manifold).`,
-        `${D1} is in Bay 5 (3 bays away—hose cannot reach).`,
-        `${D2} is in Bay 8 (across the corridor—hose cannot reach).`,
+        `${W} is in Bay 3 on the top resuscitation wall.`,
+        `${D1} is in Bay 5 on the top resuscitation wall.`,
+        `${D2} is in Bay 8 across the corridor on the intake wall.`,
       ]),
       verdict: winIdx,
       proof: `Bay 3 (${W}) lies within the 1-bay hose radius of Bay 2; Bays 5 and 8 are out of reach.`,
@@ -694,9 +694,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Golden-hour clot-buster window: tPA MUST be given within 4.5 hours of stroke onset. It is now 06:00. Who is STILL inside the safe window?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Stroke symptoms began at 02:30 (3.5 hours ago).`,
-        `${D1}: Stroke symptoms began at 00:45 (5.25 hours ago—window closed).`,
-        `${D2}: Stroke symptoms began at 01:00 (5.0 hours ago—window closed).`,
+        `${W}: Stroke symptoms began at 02:30.`,
+        `${D1}: Stroke symptoms began at 00:45.`,
+        `${D2}: Stroke symptoms began at 01:00.`,
       ]),
       verdict: winIdx,
       proof: `At 06:00, only ${W} (3.5 h elapsed) remains inside the strict 4.5-hour treatment window.`,
@@ -711,9 +711,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Trauma bay stabilization requires ALL 3 pillars intact (Airway + Breathing + Circulation). Who has TWO structural pillars failing at once?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Airway obstructed (stridor) + Circulation collapsing (BP 74/40) — 2 pillars down.`,
-        `${D1}: Airway clear + Breathing clear + Circulation low (BP 88/54) — 1 pillar down.`,
-        `${D2}: Airway clear + Breathing fast + Circulation steady (BP 120/76) — 1 pillar strained.`,
+        `${W}: Airway obstructed (raspy gasping) + Circulation collapsing (BP 74/40).`,
+        `${D1}: Airway clear + Breathing clear + Circulation low (BP 88/54).`,
+        `${D2}: Airway clear + Breathing fast + Circulation steady (BP 120/76).`,
       ]),
       verdict: winIdx,
       proof: `${W} has simultaneous failure in two structural pillars (Airway and Circulation).`,
@@ -747,9 +747,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Survival gain call: pick the patient where immediate surgery creates the LARGEST jump in survival chance.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Survival jumps from 20% untreated → 85% treated (+65% gain).`,
-        `${D1}: Survival jumps from 80% untreated → 95% treated (+15% gain).`,
-        `${D2}: Survival jumps from 5% untreated → 15% treated (+10% gain).`,
+        `${W}: Survival shifts from 20% untreated → 85% treated.`,
+        `${D1}: Survival shifts from 80% untreated → 95% treated.`,
+        `${D2}: Survival shifts from 5% untreated → 15% treated.`,
       ]),
       verdict: winIdx,
       proof: `Operating on ${W} yields a +65% survival gain, dwarfing ${D1} (+15%) and ${D2} (+10%).`,
@@ -781,9 +781,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `M&M What-If Review: "If the ambulance had arrived 5 minutes LATER (without giving TXA), ONLY ONE patient would have crossed lethal blood loss (> 2,000 mL)." Who?`,
       lines: makeShuffledLines(rng, [
-        `${W}: Lost 1,750 mL so far; without TXA was bleeding 80 mL/min (+400 mL in 5 min → 2,150 mL).`,
-        `${D1}: Lost 900 mL so far; without TXA was bleeding 60 mL/min (+300 mL → 1,200 mL).`,
-        `${D2}: Lost 1,400 mL so far; without TXA was bleeding 50 mL/min (+250 mL → 1,650 mL).`,
+        `${W}: Lost 1,750 mL so far; without TXA was bleeding 80 mL/min.`,
+        `${D1}: Lost 900 mL so far; without TXA was bleeding 60 mL/min.`,
+        `${D2}: Lost 1,400 mL so far; without TXA was bleeding 50 mL/min.`,
       ]),
       verdict: winIdx,
       proof: `Only ${W} (1,750 + 400 = 2,150 mL) would have crossed the 2,000 mL lethal threshold without early TXA.`,
@@ -815,9 +815,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Trend alert: predict which patient will crash below systolic BP 70 FIRST if current 5-minute trends continue.`,
       lines: makeShuffledLines(rng, [
-        `${W}: BP trending 112 → 96 → 80 (falling −16 every 5 min → hits 64 next).`,
-        `${D1}: BP trending 82 → 84 → 86 (slowly recovering +2 every 5 min).`,
-        `${D2}: BP trending 90 → 88 → 86 (drifting −2 every 5 min → 84 next).`,
+        `${W}: BP readings every 5 min: 112 → 96 → 80.`,
+        `${D1}: BP readings every 5 min: 82 → 84 → 86.`,
+        `${D2}: BP readings every 5 min: 90 → 88 → 86.`,
       ]),
       verdict: winIdx,
       proof: `${W}'s steep −16/5min collapse predicts systolic 64 within 5 minutes, crashing before stable ${D2}.`,
@@ -849,9 +849,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Oxygen cylinder math: project each patient's tank burn rate forward to see whose portable O2 tank hits ZERO first.`,
       lines: makeShuffledLines(rng, [
-        `${W}: 120 L left, burning 30 L/min (empty in 4 min).`,
-        `${D1}: 100 L left, burning 10 L/min (empty in 10 min).`,
-        `${D2}: 180 L left, burning 20 L/min (empty in 9 min).`,
+        `${W}: 120 L left, burning 30 L/min.`,
+        `${D1}: 100 L left, burning 10 L/min.`,
+        `${D2}: 180 L left, burning 20 L/min.`,
       ]),
       verdict: winIdx,
       proof: `Dividing reserve by burn rate: ${W} runs dry in 4 min, far sooner than ${D2} (9 min) and ${D1} (10 min).`,
@@ -866,9 +866,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Time-yield ratio: divide Clinical Acuity Points by Procedure Minutes to pick the HIGHEST clinical impact per minute.`,
       lines: makeShuffledLines(rng, [
-        `${W}: 6 Acuity pts ÷ 2 min procedure = 3.0 pts/min.`,
-        `${D1}: 8 Acuity pts ÷ 4 min procedure = 2.0 pts/min.`,
-        `${D2}: 9 Acuity pts ÷ 6 min procedure = 1.5 pts/min.`,
+        `${W}: 6 Acuity pts · 2 min procedure.`,
+        `${D1}: 8 Acuity pts · 4 min procedure.`,
+        `${D2}: 9 Acuity pts · 6 min procedure.`,
       ]),
       verdict: winIdx,
       proof: `${W} delivers 3.0 acuity points per minute—beating ${D1} (2.0/min) and ${D2} (1.5/min).`,
@@ -883,9 +883,9 @@ export const NBACK_ENGINES_PART1 = {
     return {
       directive: `Exact Trauma Risk Formula: Score = (Bleed Pts × 2) + Airway Pts − Stabilization Credit. Treat the HIGHEST exact score.`,
       lines: makeShuffledLines(rng, [
-        `${W}: Bleed 5 (×2=10) + Airway 4 − Credit 2 = 12.`,
-        `${D1}: Bleed 4 (×2=8) + Airway 5 − Credit 3 = 10.`,
-        `${D2}: Bleed 6 (×2=12) + Airway 2 − Credit 5 = 9.`,
+        `${W}: Bleed 5 · Airway 4 · Stabilization Credit 2.`,
+        `${D1}: Bleed 4 · Airway 5 · Stabilization Credit 3.`,
+        `${D2}: Bleed 6 · Airway 2 · Stabilization Credit 5.`,
       ]),
       verdict: winIdx,
       proof: `Exact formula gives ${W} = 12, ahead of ${D1} = 10 and ${D2} = 9.`,
