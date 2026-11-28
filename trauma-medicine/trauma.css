@@ -866,37 +866,44 @@ body[data-mode="nback"] .tm-dossier {
 }
 
 /* ==========================================================================
-   CLINICAL ROUNDS N-BACK CONSOLE (Balanced, Centered, Memory-Depth Ribbon)
+   CLIMB THE LADDER — 80-PATTERN CLINICAL N-BACK CONSOLE (Zero-Scroll)
    ========================================================================== */
 .tm-nb-shell {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+}
+
+.tm-nb-climb-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-teal);
 }
 
 .tm-nb-ribbon {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
 .tm-nb-slot {
   display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 4px 10px;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
   border-radius: 5px;
   background: var(--bg-deep);
   border: 1px solid var(--border-hairline);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--ink-muted);
 }
 
 .tm-nb-slot.is-anchor {
-  border-color: rgba(245, 158, 11, 0.65);
-  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.72);
+  background: rgba(245, 158, 11, 0.14);
   color: #fde68a;
   font-weight: 700;
 }
@@ -910,115 +917,214 @@ body[data-mode="nback"] .tm-dossier {
 
 .tm-nb-slot-label {
   font-family: var(--font-sans);
+  font-size: 10.5px;
+}
+
+.tm-nb-dot {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.tm-nb-dot.is-ok {
+  color: var(--accent-teal);
+}
+
+.tm-nb-dot.is-miss {
+  color: #f87171;
+}
+
+/* 3 Live Bedside Patient Cards with Varied Countdowns */
+.tm-nb-bay-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tm-nb-bay {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 7px;
+  border-radius: 7px;
+  background: #131d2b;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink-primary);
+  transition: border-color 110ms ease, background-color 110ms ease, transform 90ms ease;
+}
+
+.tm-nb-bay:hover:not(:disabled) {
+  border-color: var(--accent-teal);
+  background: #172737;
+}
+
+.tm-nb-bay.is-picked {
+  border-color: var(--accent-teal);
+  background: rgba(45, 212, 191, 0.14);
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.35);
+}
+
+.tm-nb-bay.is-saved {
+  border-color: var(--accent-teal);
+  background: rgba(15, 41, 43, 0.9);
+}
+
+.tm-nb-bay.is-target {
+  border-color: var(--accent-sky);
+  background: rgba(16, 36, 56, 0.92);
+}
+
+.tm-nb-bay.is-wrong {
+  border-color: var(--accent-red);
+  background: rgba(42, 21, 25, 0.9);
+}
+
+.tm-nb-bay.is-clash {
+  border-color: var(--accent-amber);
+  background: rgba(38, 30, 18, 0.88);
+}
+
+.tm-nb-bay.is-dim {
+  opacity: 0.44;
+}
+
+.tm-nb-bay:disabled {
+  cursor: default;
+}
+
+.tm-nb-bay-top,
+.tm-nb-bay-mid {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.tm-nb-bay-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+}
+
+.tm-nb-bay-clock {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+  color: #cbd5e1;
+}
+
+.tm-nb-bay-clock.is-warn {
+  color: #fcd34d;
+}
+
+.tm-nb-bay-clock.is-crit {
+  color: #fca5a5;
+}
+
+.tm-nb-bay-clock.is-target {
+  color: #7dd3fc;
+}
+
+.tm-nb-bay-cond {
   font-size: 11px;
-}
-
-.tm-nb-feedback {
-  font-size: 12.5px;
   font-weight: 600;
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border-hairline);
+  color: var(--accent-sky);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.tm-nb-feedback.is-clear {
-  background: var(--accent-teal-dim);
-  border-color: rgba(45, 212, 191, 0.45);
-  color: #ccfbf1;
+.tm-nb-bay-bpm {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+  flex-shrink: 0;
 }
 
-.tm-nb-feedback.is-miss {
-  background: var(--accent-red-dim);
-  border-color: rgba(239, 68, 68, 0.45);
-  color: #fecaca;
+.tm-nb-bar-track {
+  position: relative;
+  height: 4.5px;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.16);
+  overflow: visible;
+  margin-top: 2px;
 }
 
+.tm-nb-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 120ms linear;
+}
+
+.tm-nb-bar-fill.is-ok {
+  background: var(--accent-teal);
+}
+
+.tm-nb-bar-fill.is-warn {
+  background: var(--accent-amber);
+}
+
+.tm-nb-bar-fill.is-crit {
+  background: var(--accent-red);
+}
+
+.tm-nb-bar-tick {
+  position: absolute;
+  left: 78%;
+  top: -1.5px;
+  width: 1.5px;
+  height: 7.5px;
+  background: rgba(239, 68, 68, 0.65);
+}
+
+/* Clinical Briefing & Directive */
 .tm-nb-briefing {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: 7px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 7px;
 }
 
-.tm-nb-pts {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding-bottom: 7px;
-  border-bottom: 1px solid var(--border-hairline);
-}
-
-.tm-nb-pt-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.tm-nb-pt-chip strong {
-  color: var(--ink-primary);
+.tm-nb-directive {
+  font-size: 14px;
   font-weight: 700;
-}
-
-.tm-nb-pt-chip span {
-  color: var(--accent-sky);
-  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ink-primary);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .tm-nb-lines {
   margin: 0;
-  padding-left: 20px;
-  font-size: 15.5px;
-  font-weight: 600;
-  line-height: 1.62;
-  color: var(--ink-primary);
-}
-
-.tm-nb-enc-note {
-  font-size: 12.5px;
-  color: var(--ink-secondary);
-}
-
-.tm-nb-encoding {
+  padding-left: 19px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.48;
+  color: #e2e8f0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 3px;
 }
 
-.tm-nb-matrix {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Tactile Dual-Task Decision Console */
+.tm-nb-console {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
-.tm-nb-row {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 7px;
-  padding: 9px 11px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-hairline);
-  border-radius: 6px;
-}
-
-.tm-nb-q {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-primary);
-}
-
-.tm-nb-pair {
-  display: flex;
+.tm-nb-verdict-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 7px;
 }
 
 .tm-nb-choice {
-  flex: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1026,15 +1132,88 @@ body[data-mode="nback"] .tm-dossier {
   min-height: 36px;
   padding: 5px 10px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-hairline);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   color: var(--ink-primary);
   font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.tm-nb-choice:hover {
+  border-color: var(--accent-teal);
+}
+
+.tm-nb-choice.is-selected {
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-dim);
+  color: #ccfbf1;
+}
+
+.tm-nb-clash-btn.is-selected {
+  border-color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.2);
+  color: #fde68a;
+}
+
+.tm-nb-enc-banner {
+  padding: 7px 11px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.tm-nb-enc-banner strong {
+  color: var(--ink-primary);
+}
+
+.tm-nb-locks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.tm-nb-lock-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+}
+
+.tm-nb-lock-q {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--ink-secondary);
+}
+
+.tm-nb-pair {
+  display: flex;
+  gap: 5px;
+}
+
+.tm-nb-lock-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hairline);
+  color: var(--ink-primary);
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.tm-nb-choice.is-selected {
+.tm-nb-lock-btn.is-selected {
   border-color: var(--accent-teal);
   background: var(--accent-teal-dim);
   color: #ccfbf1;
@@ -1054,21 +1233,59 @@ body[data-mode="nback"] .tm-dossier {
   color: var(--ink-muted);
 }
 
-.tm-nb-submit {
-  align-self: flex-start;
+.tm-nb-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tm-nb-echo-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.tm-nb-echo-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+  margin-right: 1px;
+}
+
+.tm-nb-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1.5px 5.5px;
+  border-radius: 4px;
+  border: 1px solid var(--border-hairline);
+  white-space: nowrap;
+}
+
+.tm-nb-chip.is-ok {
+  background: rgba(45, 212, 191, 0.14);
+  border-color: rgba(45, 212, 191, 0.45);
+  color: #5eead4;
+}
+
+.tm-nb-chip.is-miss {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
 }
 
 .tm-key-cap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 19px;
-  height: 19px;
+  min-width: 18px;
+  height: 18px;
   padding: 0 4px;
   border-radius: 4px;
   background: rgba(148, 163, 184, 0.14);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   color: var(--ink-secondary);
 }
@@ -1664,8 +1881,12 @@ body[data-mode="nback"] .tm-dossier {
     height: 168px;
   }
   .tm-chart-grid,
-  .tm-nb-matrix {
+  .tm-nb-bay-grid,
+  .tm-nb-locks-grid {
     grid-template-columns: 1fr;
+  }
+  .tm-nb-verdict-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .tm-diff-grid,
   .tm-run-controls {

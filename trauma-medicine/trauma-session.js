@@ -108,6 +108,7 @@ export class TraumaSession {
     this.byPhase = new Map();
     this.nbackPoints = 0;
     this.nbackMaxPoints = 0;
+    this.peakNBackLevel = nbackLevel;
   }
 
   isComplete() {
@@ -170,11 +171,14 @@ export class TraumaSession {
     return { ladderEvent };
   }
 
-  recordNBackTrial({ correctCount, totalChecks, elapsedMs }) {
+  recordNBackTrial({ trial = null, correctCount, totalChecks, elapsedMs, peakLevel = null }) {
     this.total++;
     const allRight = correctCount === totalChecks;
     this.nbackPoints += correctCount;
     this.nbackMaxPoints += totalChecks;
+    if (peakLevel && peakLevel > this.peakNBackLevel) {
+      this.peakNBackLevel = peakLevel;
+    }
     if (allRight) {
       this.cleared++;
       this.currentStreak++;
@@ -185,6 +189,38 @@ export class TraumaSession {
     } else {
       this.missed++;
       this.currentStreak = 0;
+    }
+
+    if (trial && trial.reasoningType) {
+      const rId = trial.reasoningType;
+      const rMeta = getReasoningType(rId);
+      if (!this.byReasoning.has(rId)) {
+        this.byReasoning.set(rId, { id: rId, meta: rMeta, cleared: 0, total: 0 });
+      }
+      const rStat = this.byReasoning.get(rId);
+      rStat.total++;
+      if (allRight) rStat.cleared++;
+
+      const store = loadMasteryStore();
+      const prev = store[rId] || { cleared: 0, total: 0 };
+      store[rId] = { cleared: prev.cleared + (allRight ? 1 : 0), total: prev.total + 1 };
+      saveMasteryStore(store);
+
+      const lvl = rMeta.level;
+      if (!this.byLevel.has(lvl)) {
+        this.byLevel.set(lvl, { id: lvl, meta: REASONING_LEVELS[lvl], cleared: 0, total: 0 });
+      }
+      const lStat = this.byLevel.get(lvl);
+      lStat.total++;
+      if (allRight) lStat.cleared++;
+
+      const pId = trial.phase || rMeta.phase;
+      if (!this.byPhase.has(pId)) {
+        this.byPhase.set(pId, { id: pId, meta: getClinicalPhase(pId), cleared: 0, total: 0 });
+      }
+      const pStat = this.byPhase.get(pId);
+      pStat.total++;
+      if (allRight) pStat.cleared++;
     }
   }
 
@@ -214,6 +250,7 @@ export class TraumaSession {
     return {
       mode: this.mode,
       nbackLevel: this.nbackLevel,
+      peakNBackLevel: this.peakNBackLevel,
       total: this.total,
       cleared: this.cleared,
       missed: this.missed,

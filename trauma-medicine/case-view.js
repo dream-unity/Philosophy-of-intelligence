@@ -351,151 +351,291 @@ export function renderClinicalDossier(container, {
   }
 }
 
+function formatNbCountdown(sec) {
+  const s = Math.max(0, Math.ceil(sec));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${String(rem).padStart(2, '0')}`;
+}
+
 export function renderNBackView(container, {
   trial,
   answers,
-  lastFeedback,
-  onChoose,
+  debrief,
+  climbProgress,
+  isLastCase = false,
+  holdDebrief = false,
+  onChooseVerdict,
+  onChooseLock,
   onSubmit,
+  onNextRound,
+  onHoldToggle,
 }) {
   const isEncoding = trial.truth.isEncoding;
-  const phaseKey = trial.relation.phase.toLowerCase().includes('after')
-    ? 'after'
-    : trial.relation.phase.toLowerCase().includes('inside')
-      ? 'inside'
-      : 'before';
+  const anchorRound = trial.index - trial.level;
 
-  // Memory-depth ribbon showing rounds up to current & highlighting the N-back comparison anchor
-  const ribbonStart = Math.max(1, trial.index - trial.level - 1);
+  // Memory-Depth Ribbon: shows logged rounds with accuracy dots and highlights the N-Back Echo Target
   const ribbonSlots = [];
-  for (let r = ribbonStart; r <= trial.index; r++) {
-    const isCurrent = r === trial.index;
-    const isTargetBack = !isEncoding && r === trial.index - trial.level;
+  const trail = trial.historyTrail || [];
+  for (const prev of trail) {
+    const isAnchor = !isEncoding && prev.index === anchorRound;
+    const statusDot =
+      prev.perfect === true
+        ? '<span class="tm-nb-dot is-ok">✓</span>'
+        : prev.perfect === false
+          ? '<span class="tm-nb-dot is-miss">✕</span>'
+          : '';
     ribbonSlots.push(
-      `<div class="tm-nb-slot ${isCurrent ? 'is-current' : ''} ${isTargetBack ? 'is-anchor' : ''}">
-         <span class="tm-nb-slot-num">#${r}</span>
-         <span class="tm-nb-slot-label">${
-           isCurrent ? 'Current' : isTargetBack ? `${trial.level}-Back` : 'Logged'
-         }</span>
+      `<div class="tm-nb-slot ${isAnchor ? 'is-anchor' : ''}">
+         <span>#${prev.index}</span>${statusDot}${
+           isAnchor ? `<span class="tm-nb-slot-label">${trial.level}-Back Echo</span>` : ''
+         }
        </div>`
     );
   }
+  ribbonSlots.push(
+    `<div class="tm-nb-slot is-current">
+       <span>#${trial.index}</span>
+       <span class="tm-nb-slot-label">${isEncoding ? `Encode ${trial.index}/${trial.level}` : 'Current'}</span>
+     </div>`
+  );
 
-  // Patient clinical tags for the 3 patients in this briefing
-  const patientStripHtml = trial.names
-    .map((name) => {
-      const pid = name.toLowerCase();
-      const cond = getPatientCondition(pid, phaseKey);
-      return `<div class="tm-nb-pt-chip">
-        <strong>${esc(name)}</strong>
-        <span>${esc(cond)}</span>
-      </div>`;
+  // 3 Live Bedside Patient Cards (individualized varied countdowns + real conditions + click-to-call)
+  const bayCardsHtml = trial.patients
+    .map((pt, i) => {
+      const isSelected = answers.verdict === i;
+      let stateClass = '';
+      let badgeText = formatNbCountdown(pt.remSec);
+      let badgeClass = pt.remSec <= 15 ? 'is-crit' : pt.remSec <= 38 ? 'is-warn' : '';
+
+      if (debrief) {
+        if (trial.verdict === i) {
+          stateClass = debrief.verdictCorrect ? 'is-saved' : 'is-target';
+          badgeText = debrief.verdictCorrect ? '✓ SAVED' : '◎ TARGET';
+          badgeClass = 'is-target';
+        } else if (answers.verdict === i && trial.verdict !== i) {
+          stateClass = 'is-wrong';
+          badgeText = '✕ WRONG';
+          badgeClass = 'is-crit';
+        } else if (trial.isClash) {
+          stateClass = 'is-clash';
+          badgeText = '⚡ CLASH';
+          badgeClass = 'is-warn';
+        } else {
+          stateClass = 'is-dim';
+        }
+      } else if (isSelected) {
+        stateClass = 'is-picked';
+      }
+
+      const barPct = Math.round(pt.progress * 100);
+      const barTone = pt.remSec <= 15 ? 'is-crit' : pt.remSec <= 38 ? 'is-warn' : 'is-ok';
+
+      return `<button type="button" class="tm-nb-bay ${stateClass}" data-nb-verdict="${i}" ${debrief ? 'disabled' : ''}>
+        <div class="tm-nb-bay-top">
+          <span class="tm-nb-bay-id">
+            <span class="tm-key-cap">${i + 1}</span>
+            <strong>${esc(pt.name)}</strong>
+          </span>
+          <span class="tm-nb-bay-clock tm-tabular ${badgeClass}" data-nb-clock="${i}">${esc(badgeText)}</span>
+        </div>
+        <div class="tm-nb-bay-mid">
+          <span class="tm-nb-bay-cond">${esc(pt.condition)}</span>
+          <span class="tm-nb-bay-bpm tm-tabular">${pt.bpm} BPM</span>
+        </div>
+        <div class="tm-nb-bar-track">
+          <div class="tm-nb-bar-fill ${barTone}" data-nb-bar="${i}" style="width:${barPct}%"></div>
+          <span class="tm-nb-bar-tick" aria-hidden="true"></span>
+        </div>
+      </button>`;
     })
     .join('');
 
-  const toggleBtn = (field, val, label, keyHint) => {
-    const active = answers[field] === val;
-    return `<button type="button" class="tm-nb-choice ${active ? 'is-selected' : ''}" data-nb-field="${field}" data-nb-val="${val}">
-      <span class="tm-key-cap">${keyHint}</span>
-      <span>${esc(label)}</span>
-    </button>`;
-  };
+  // Bottom Decision Console -> swaps cleanly IN-PLACE to Post-Round Clinical Debrief
+  let consoleHtml = '';
 
-  const matrixHtml = isEncoding
-    ? `<div class="tm-nb-encoding">
-         <div class="tm-nb-enc-note">Memorize this clinical briefing (encoding round ${trial.index} of ${trial.level} before ${trial.level}-back comparisons begin).</div>
-         <div class="tm-nb-row">
-           <span class="tm-nb-q">Is this bedside briefing clinically consistent or a logical contradiction?</span>
-           <div class="tm-nb-pair">
-             ${toggleBtn('valid', true, 'Consistent', 'A')}
-             ${toggleBtn('valid', false, 'Contradiction', 'S')}
-           </div>
-         </div>
-         <button type="button" class="tm-btn tm-btn-primary tm-nb-submit" data-nb-submit="true">
-           Confirm &amp; Next Round (Space)
-         </button>
-       </div>`
-    : `<div class="tm-nb-matrix">
-         <div class="tm-nb-row">
-           <span class="tm-nb-q">1. Current briefing consistency</span>
-           <div class="tm-nb-pair">
-             ${toggleBtn('valid', true, 'Consistent', 'A')}
-             ${toggleBtn('valid', false, 'Contradiction', 'S')}
-           </div>
-         </div>
-         <div class="tm-nb-row">
-           <span class="tm-nb-q">2. Same logical structure as #${trial.index - trial.level}?</span>
-           <div class="tm-nb-pair">
-             ${toggleBtn('samePattern', true, 'Same Pattern', 'D')}
-             ${toggleBtn('samePattern', false, 'Different', 'F')}
-           </div>
-         </div>
-         <div class="tm-nb-row">
-           <span class="tm-nb-q">3. Same clinical domain as #${trial.index - trial.level}?</span>
-           <div class="tm-nb-pair">
-             ${toggleBtn('sameDomain', true, 'Same Domain', 'H')}
-             ${toggleBtn('sameDomain', false, 'Different', 'J')}
-           </div>
-         </div>
-         <div class="tm-nb-row">
-           <span class="tm-nb-q">4. Same lead patient as #${trial.index - trial.level}?</span>
-           <div class="tm-nb-pair">
-             ${toggleBtn('sameLead', true, 'Same Lead', 'K')}
-             ${toggleBtn('sameLead', false, 'Different', 'L')}
-           </div>
-         </div>
-       </div>
-       <div class="tm-nb-footer">
-         <span class="tm-nb-keys-hint">Keys: A/S · D/F · H/J · K/L · Space submit</span>
-         <button type="button" class="tm-btn tm-btn-primary tm-nb-submit" data-nb-submit="true">
-           Submit Round (Space)
-         </button>
-       </div>`;
+  if (!debrief) {
+    const verdictButtonsHtml = `
+      <div class="tm-nb-verdict-row" role="group" aria-label="Bedside clinical call">
+        ${trial.patients
+          .map(
+            (pt, i) => `<button type="button" class="tm-nb-choice ${answers.verdict === i ? 'is-selected' : ''}" data-nb-verdict="${i}" aria-pressed="${answers.verdict === i ? 'true' : 'false'}">
+              <span class="tm-key-cap">${i + 1}</span>
+              <span>${esc(pt.name)}</span>
+            </button>`
+          )
+          .join('')}
+        <button type="button" class="tm-nb-choice tm-nb-clash-btn ${answers.verdict === 'clash' ? 'is-selected' : ''}" data-nb-verdict="clash" aria-pressed="${answers.verdict === 'clash' ? 'true' : 'false'}">
+          <span class="tm-key-cap">4</span>
+          <span>Clinical Clash</span>
+        </button>
+      </div>
+    `;
 
-  const feedbackLine = lastFeedback
-    ? `<div class="tm-nb-feedback ${lastFeedback.perfect ? 'is-clear' : 'is-miss'}">
-         Last round: ${lastFeedback.correct}/${lastFeedback.total} accurate${
-           lastFeedback.note ? ` · ${esc(lastFeedback.note)}` : ''
-         }
-       </div>`
-    : '';
+    const lockBtn = (field, val, label, keyHint) => {
+      const active = answers[field] === val;
+      return `<button type="button" class="tm-nb-lock-btn ${active ? 'is-selected' : ''}" data-nb-lock="${field}" data-nb-val="${val}" aria-pressed="${active ? 'true' : 'false'}">
+        <span class="tm-key-cap">${keyHint}</span>
+        <span>${esc(label)}</span>
+      </button>`;
+    };
+
+    const locksHtml = isEncoding
+      ? `<div class="tm-nb-enc-banner">
+           Encoding round <strong>${trial.index} of ${trial.level}</strong> — remember this round's <strong>Phase (${esc(trial.phaseMeta.shortLabel)})</strong>, <strong>Target Call</strong>, and <strong>Domain (${esc(trial.domain.short)})</strong> for future ${trial.level}-back matches.
+         </div>`
+      : `<div class="tm-nb-locks-grid" aria-label="N-Back comparisons against round ${anchorRound}">
+           <div class="tm-nb-lock-card">
+             <span class="tm-nb-lock-q">Same Phase as #${anchorRound}?</span>
+             <div class="tm-nb-pair">
+               ${lockBtn('samePhase', true, 'Same', 'A')}
+               ${lockBtn('samePhase', false, 'Diff', 'S')}
+             </div>
+           </div>
+           <div class="tm-nb-lock-card">
+             <span class="tm-nb-lock-q">Same Target as #${anchorRound}?</span>
+             <div class="tm-nb-pair">
+               ${lockBtn('sameTarget', true, 'Same', 'D')}
+               ${lockBtn('sameTarget', false, 'Diff', 'F')}
+             </div>
+           </div>
+           <div class="tm-nb-lock-card">
+             <span class="tm-nb-lock-q">Same Domain as #${anchorRound}?</span>
+             <div class="tm-nb-pair">
+               ${lockBtn('sameDomain', true, 'Same', 'H')}
+               ${lockBtn('sameDomain', false, 'Diff', 'J')}
+             </div>
+           </div>
+         </div>`;
+
+    const canSubmit = answers.verdict !== null;
+    consoleHtml = `
+      <section class="tm-nb-console" aria-label="Clinical decision console">
+        ${verdictButtonsHtml}
+        ${locksHtml}
+        <div class="tm-nb-footer">
+          <span class="tm-nb-keys-hint">${
+            isEncoding
+              ? 'Keys: 1–3 Patient · 4 Clash · Space Submit'
+              : 'Keys: 1–4 Call · A/S Phase · D/F Target · H/J Domain · Space Submit'
+          }</span>
+          <button type="button" class="tm-btn tm-btn-primary tm-nb-submit" data-nb-submit="true" ${canSubmit ? '' : 'disabled'}>
+            ${isEncoding ? 'Confirm Call (Space)' : 'Submit Round (Space)'}
+          </button>
+        </div>
+      </section>
+    `;
+  } else {
+    const r = trial.reasoningMeta;
+    const outcomeClass = debrief.perfect ? 'is-clear' : 'is-miss';
+    const secStr = (debrief.elapsedMs / 1000).toFixed(1);
+    const titleText = debrief.timedOut
+      ? 'Code Blue · Patient Crashed'
+      : debrief.perfect
+        ? `Perfect Call · ${debrief.correct}/${debrief.total} · ${secStr}s`
+        : `Round Result · ${debrief.correct}/${debrief.total}`;
+    const ladderBanner = debrief.ladderEvent
+      ? `<span class="tm-ladder-note">${
+          debrief.ladderEvent.type === 'promoted'
+            ? `▲ Climbed to ${debrief.ladderEvent.level}-Back!`
+            : `▼ Stepped to ${debrief.ladderEvent.level}-Back`
+        }</span>`
+      : '';
+
+    const echoChipsHtml = trial.truth.nBackRef
+      ? `<div class="tm-nb-echo-chips">
+           <span class="tm-nb-echo-label">vs #${trial.truth.nBackRef.index}:</span>
+           <span class="tm-nb-chip ${debrief.checks.samePhase ? 'is-ok' : 'is-miss'}">Phase ${esc(trial.truth.nBackRef.phaseShort)} ${debrief.checks.samePhase ? '✓' : '✕'}</span>
+           <span class="tm-nb-chip ${debrief.checks.sameTarget ? 'is-ok' : 'is-miss'}">Target ${esc(trial.truth.nBackRef.verdictName)} ${debrief.checks.sameTarget ? '✓' : '✕'}</span>
+           <span class="tm-nb-chip ${debrief.checks.sameDomain ? 'is-ok' : 'is-miss'}">Domain ${esc(trial.truth.nBackRef.domainShort)} ${debrief.checks.sameDomain ? '✓' : '✕'}</span>
+         </div>`
+      : '';
+
+    const nextLabel = isLastCase ? 'View Summary (Space)' : 'Next Round (Space)';
+
+    consoleHtml = `
+      <section class="tm-debrief tm-nb-debrief ${outcomeClass}" aria-live="polite">
+        <div class="tm-debrief-top">
+          <div class="tm-debrief-headline">
+            <strong class="tm-debrief-title">${esc(titleText)}</strong>
+            <span class="tm-debrief-targets">Call: <strong>${esc(trial.truth.verdictName)}</strong></span>
+            ${ladderBanner}
+          </div>
+          <div class="tm-debrief-actions">
+            <button type="button" class="tm-btn tm-btn-ghost tm-btn-compact" data-nb-hold="true">${
+              holdDebrief ? 'Auto-Next Off' : 'Hold'
+            }</button>
+            <button type="button" class="tm-btn tm-btn-primary tm-btn-compact" data-nb-next="true">${nextLabel}</button>
+          </div>
+        </div>
+        <div class="tm-debrief-cols">
+          <div class="tm-debrief-col">
+            <div class="tm-debrief-proof">${esc(trial.explanation.proof)}</div>
+            <div class="tm-debrief-rival">${esc(trial.explanation.rival)}</div>
+            ${echoChipsHtml}
+          </div>
+          <div class="tm-debrief-col tm-lesson-col">
+            <div class="tm-lesson-head tm-debrief-type-badge">#${r.number}/${TOTAL_REASONING_TYPES} ${esc(r.name)} · ${esc(r.levelLabel)} · ${esc(r.familyShort)}</div>
+            <div class="tm-lesson-copy"><strong>${esc(r.coreOperation)}</strong> ${esc(r.doctorLesson)}</div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
 
   container.innerHTML = `
     <div class="tm-nb-shell">
       <div class="tm-dossier-header">
         <div class="tm-dossier-meta">
-          <span class="tm-phase-text">Climb the Ladder · ${trial.level}-Back</span>
+          <span class="tm-phase-text">${esc(trial.phaseMeta.label)}</span>
           <span class="tm-sep" aria-hidden="true">·</span>
-          <span class="tm-scenario-text">${esc(trial.relation.phase)}</span>
+          <span class="tm-scenario-text">${esc(trial.domain.label)}</span>
         </div>
         <div class="tm-slots-readout">
-          <span class="tm-meta-label">Round</span>
-          <span class="tm-slots-num">#${trial.index}</span>
+          <span class="tm-nb-climb-tag">${esc(climbProgress || `${trial.level}-Back`)}</span>
+          <span class="tm-sep" aria-hidden="true">·</span>
+          <span class="tm-slots-num">Round #${trial.index}</span>
         </div>
       </div>
 
-      <div class="tm-nb-ribbon" aria-label="Memory window">${ribbonSlots.join('')}</div>
+      <div class="tm-nb-ribbon" aria-label="Working memory window">${ribbonSlots.join('')}</div>
 
-      ${feedbackLine}
+      <section class="tm-nb-bay-grid" aria-label="Three active trauma bays">
+        ${bayCardsHtml}
+      </section>
 
-      <section class="tm-nb-briefing" aria-label="3-statement clinical briefing">
-        <div class="tm-nb-pts">${patientStripHtml}</div>
+      <section class="tm-nb-briefing" aria-label="Clinical case briefing">
+        <div class="tm-nb-directive">${esc(trial.directive)}</div>
         <ol class="tm-nb-lines">
           ${trial.lines.map((line) => `<li>${esc(line)}</li>`).join('')}
         </ol>
       </section>
 
-      ${matrixHtml}
+      ${consoleHtml}
     </div>
   `;
 
-  container.querySelectorAll('[data-nb-field]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const field = btn.dataset.nbField;
-      const val = btn.dataset.nbVal === 'true';
-      onChoose(field, val);
+  if (!debrief) {
+    container.querySelectorAll('[data-nb-verdict]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const raw = btn.dataset.nbVerdict;
+        const val = raw === 'clash' ? 'clash' : Number(raw);
+        if (onChooseVerdict) onChooseVerdict(val);
+      });
     });
-  });
-  const submitBtn = container.querySelector('[data-nb-submit="true"]');
-  if (submitBtn) submitBtn.addEventListener('click', onSubmit);
+    container.querySelectorAll('[data-nb-lock]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const field = btn.dataset.nbLock;
+        const val = btn.dataset.nbVal === 'true';
+        if (onChooseLock) onChooseLock(field, val);
+      });
+    });
+    const submitBtn = container.querySelector('[data-nb-submit="true"]');
+    if (submitBtn && onSubmit) submitBtn.addEventListener('click', onSubmit);
+  } else {
+    const nextBtn = container.querySelector('[data-nb-next="true"]');
+    if (nextBtn && onNextRound) nextBtn.addEventListener('click', onNextRound);
+    const holdBtn = container.querySelector('[data-nb-hold="true"]');
+    if (holdBtn && onHoldToggle) holdBtn.addEventListener('click', onHoldToggle);
+  }
 }

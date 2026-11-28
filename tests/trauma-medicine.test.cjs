@@ -162,14 +162,20 @@ test('Trauma Medicine: Tier 4, Tier 5 & Tier 6 coupled 2-SAT cross-checks satisf
   }
 });
 
-test('Trauma Medicine: Clinical Rounds N-Back semantic isomorphism & irreducible 3-line contradictions', async () => {
+test('Trauma Medicine: Climb the Ladder (N-Back) covers ALL 80 distinct reasoning types, adaptive 1-to-6 climbing, zero spoilers & isomorphism math', async () => {
   const {
     ClinicalNBackStream,
+    NBACK_ENGINES,
+    NBACK_PROMOTE_STREAK,
+    NBACK_DEMOTE_MISS_STREAK,
     areTriadsIsomorphic,
     isIrreducibleContradiction,
     isTriadSatisfiable,
   } = await mod('nback-cases.js');
+  const { REASONING_TYPE_LIST } = await mod('reasoning-types.js');
+  const { TraumaSession } = await mod('trauma-session.js');
 
+  // Relational isomorphism & irreducible 3-line contradiction solvers
   const t1 = [
     { op: '>', a: 0, b: 1 },
     { op: '>', a: 1, b: 2 },
@@ -190,21 +196,88 @@ test('Trauma Medicine: Clinical Rounds N-Back semantic isomorphism & irreducible
   assert.equal(isTriadSatisfiable(t1), true);
   assert.equal(isIrreducibleContradiction(tClash), true);
 
-  for (const level of [1, 2, 3, 6]) {
-    const stream = new ClinicalNBackStream(level, 300 + level * 19);
-    for (let i = 0; i < level + 6; i++) {
-      const trial = stream.nextTrial();
-      assert.equal(trial.lines.length, 3);
-      assert.equal(trial.truth.isEncoding, i < level);
-      if (trial.isClash) {
-        assert.equal(isIrreducibleContradiction(trial.stmts), true);
-        assert.equal(trial.truth.valid, false);
-      } else {
-        assert.equal(isTriadSatisfiable(trial.stmts), true);
-        assert.equal(trial.truth.valid, true);
-      }
-    }
+  // Verify 1-to-1 bespoke N-Back engines exist for ALL 80 reasoning types
+  assert.equal(Object.keys(NBACK_ENGINES).length, 80, 'all 80 reasoning types have bespoke N-Back engines');
+  for (const r of REASONING_TYPE_LIST) {
+    assert.equal(typeof NBACK_ENGINES[r.id], 'function', `N-Back engine exists for #${r.number} ${r.id}`);
   }
+
+  // Run 80 consecutive rounds in 2-Back and verify 80/80 coverage, zero repeats, zero spoilers, zero jargon
+  const stream = new ClinicalNBackStream(2, 771122);
+  const session = new TraumaSession({ mode: 'nback', nbackLevel: 2, targetTrials: 80 });
+  const seenTypes = new Set();
+  const seenFamilies = new Set();
+  const seenLevels = new Set();
+  const seenPhases = new Set();
+  const seenDomains = new Set();
+  let prevType = null;
+  let clashCount = 0;
+
+  const spoilerRe = /\b(bayesian|syllogis\w*|antinomic|antithes\w*|dialectic\w*|abduct\w*|deduct\w*|induct\w*|heuristic\w*|metacognit\w*|meta-reasoning|counterfactual|falsif\w*|ontolog\w*|epistemic|combinatorial|divergen\w*|converg\w*|decision-theoretic|game-theoretic|theory of mind|transitiv\w*|disjunctiv\w*|recursiv\w*|extrapolat\w*|prognostic|proportional|analog\w*|anomal\w*|first-principles|lateral|emergent|decompos\w*|non-monotonic|perspectiv\w*|pragmatic|synthesi\w*|second-order|algorithm\w*|adversarial|optimis\w*|instrumental|mentalistic|motivational)\b/i;
+  const jargonRe = /\bWeights?\b|right-side|left-side|\barrows?\b|\brows\b|\bchannel\b|A\s*→\s*M\s*→\s*B/i;
+
+  for (let i = 0; i < 80; i++) {
+    const trial = stream.nextTrial();
+    assert.notEqual(trial.reasoningType, prevType, `N-Back round ${i + 1} repeated ${prevType}`);
+    prevType = trial.reasoningType;
+    assert.equal(trial.lines.length, 3, `round ${i + 1} has 3 clinical lines`);
+    assert.equal(trial.patients.length, 3, `round ${i + 1} has 3 live patient cards`);
+    assert.equal(trial.truth.isEncoding, i < 2);
+    assert.ok(
+      trial.verdict === 'clash' || trial.verdict === 0 || trial.verdict === 1 || trial.verdict === 2,
+      `valid verdict on #${trial.reasoningMeta.number} ${trial.reasoningType}`
+    );
+    assert.ok(!spoilerRe.test(trial.directive), `N-Back directive spoiled #${trial.reasoningMeta.number}: ${trial.directive}`);
+    assert.ok(!jargonRe.test(`${trial.directive} ${trial.lines.join(' ')}`), `jargon leaked in #${trial.reasoningMeta.number}`);
+
+    // Verify individualized countdown spread across the 3 patients
+    const rems = trial.patients.map((p) => p.remSec);
+    assert.ok(Math.max(...rems) - Math.min(...rems) >= 40, `varied countdown spread on round ${i + 1}`);
+
+    if (trial.isClash) clashCount++;
+    seenTypes.add(trial.reasoningType);
+    seenFamilies.add(trial.reasoningMeta.familyId);
+    seenLevels.add(trial.reasoningMeta.level);
+    seenPhases.add(trial.phase);
+    seenDomains.add(trial.domain.id);
+
+    session.recordNBackTrial({
+      trial,
+      correctCount: trial.truth.isEncoding ? 1 : 4,
+      totalChecks: trial.truth.isEncoding ? 1 : 4,
+      elapsedMs: 4200,
+      peakLevel: stream.peakLevel,
+    });
+  }
+
+  assert.equal(seenTypes.size, 80, `80 consecutive N-Back rounds cover ALL 80 distinct reasoning types, got ${seenTypes.size}`);
+  assert.equal(seenFamilies.size, 8, 'N-Back covered all 8 reasoning families');
+  assert.equal(seenLevels.size, 3, 'N-Back covered Atomic, Composite, and Meta-Reasoning');
+  assert.equal(seenPhases.size, 3, 'N-Back covered Before, Inside, and After care phases');
+  assert.equal(seenDomains.size, 7, 'N-Back covered all 7 clinical crisis domains');
+  assert.ok(clashCount >= 3, `N-Back surfaced real clinical clashes (${clashCount})`);
+
+  const snap = session.snapshot();
+  assert.equal(snap.reasoningBreakdown.length, 80, 'TraumaSession tracked all 80 types in N-Back');
+  assert.equal(snap.levelBreakdown.length, 3, 'TraumaSession tracked all 3 cognitive levels in N-Back');
+  assert.equal(snap.phaseBreakdown.length, 3, 'TraumaSession tracked all 3 phases in N-Back');
+
+  // Verify Adaptive N-Back Ladder climbs on NBACK_PROMOTE_STREAK perfect rounds and steps down on NBACK_DEMOTE_MISS_STREAK misses
+  const climbStream = new ClinicalNBackStream(2, 9988);
+  for (let i = 0; i < NBACK_PROMOTE_STREAK - 1; i++) {
+    assert.equal(climbStream.recordRoundResult(true), null);
+  }
+  const promo = climbStream.recordRoundResult(true);
+  assert.equal(promo.type, 'promoted');
+  assert.equal(climbStream.level, 3);
+  assert.equal(climbStream.peakLevel, 3);
+
+  for (let i = 0; i < NBACK_DEMOTE_MISS_STREAK - 1; i++) {
+    assert.equal(climbStream.recordRoundResult(false), null);
+  }
+  const demo = climbStream.recordRoundResult(false);
+  assert.equal(demo.type, 'demoted');
+  assert.equal(climbStream.level, 2);
 });
 
 test('Trauma Medicine: ZeroToHeroLadder & TraumaSession track 3-level and 80-type breakdowns', async () => {

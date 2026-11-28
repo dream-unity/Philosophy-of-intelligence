@@ -103,8 +103,9 @@ const state = {
   debriefTimer: null,
 
   nbackTrial: null,
-  nbackAnswers: { valid: null, samePattern: null, sameDomain: null, sameLead: null },
-  nbackFeedback: null,
+  nbackAnswers: { verdict: null, samePhase: false, sameTarget: false, sameDomain: false },
+  nbackDebrief: null,
+  nbackTickTimer: null,
 };
 
 const audio = new ClinicalAudio();
@@ -310,10 +311,15 @@ function renderBayButtons() {
 function updateHud() {
   if (!state.session) return;
   if (state.setupMode === 'nback') {
-    dom.hudTier.textContent = `${state.nbackLevel}-Back`;
-    dom.hudLadder.textContent = `${state.session.accuracyPercent()}% accuracy`;
-    const currentRound = Math.min(state.session.targetTrials, state.session.total + 1);
-    dom.hudCase.textContent = `${currentRound}/${state.session.targetTrials}`;
+    const activeDepth = state.nbackStream ? state.nbackStream.level : state.nbackLevel;
+    dom.hudTier.textContent = `${activeDepth}-Back`;
+    dom.hudLadder.textContent = state.nbackStream
+      ? state.nbackStream.progressText()
+      : `${state.session.accuracyPercent()}% accuracy`;
+    const shownRound = state.nbackDebrief
+      ? Math.min(state.session.targetTrials, state.session.total)
+      : Math.min(state.session.targetTrials, state.session.total + 1);
+    dom.hudCase.textContent = `${shownRound}/${state.session.targetTrials}`;
   } else {
     const tierId = state.session.activeTierId();
     const tierObj = DIFFICULTY_TIERS.find((t) => t.id === tierId) || DIFFICULTY_TIERS[0];
@@ -363,12 +369,13 @@ function startShift({ pinnedReasoningType = null } = {}) {
   state.highlightedPatientId = null;
   state.pinnedHighlightId = null;
   state.debrief = null;
-  state.nbackFeedback = null;
+  state.nbackDebrief = null;
+  stopNBackClock();
 
   const isNback = state.setupMode === 'nback';
   dom.body.dataset.mode = isNback ? 'nback' : 'standard';
   dom.wardWrap.hidden = isNback;
-  if (dom.paceControl) dom.paceControl.hidden = isNback;
+  if (dom.paceControl) dom.paceControl.hidden = false;
 
   setScreen('playing');
   scene.setPaceMultiplier(state.pace);
@@ -529,18 +536,82 @@ function finishStandardTrial({ cleared, reason, wrongId }) {
 }
 
 // =========================================================================
-// CLIMB THE LADDER (N-BACK) FLOW
+// CLIMB THE LADDER (80-PATTERN ADAPTIVE CLINICAL N-BACK) FLOW
 // =========================================================================
+function stopNBackClock() {
+  if (state.nbackTickTimer) {
+    clearInterval(state.nbackTickTimer);
+    state.nbackTickTimer = null;
+  }
+}
+
+function startNBackClock() {
+  stopNBackClock();
+  let lastTick = performance.now();
+  state.nbackTickTimer = setInterval(() => {
+    if (
+      state.screen !== 'playing' ||
+      state.setupMode !== 'nback' ||
+      !state.nbackTrial ||
+      state.nbackDebrief
+    ) {
+      lastTick = performance.now();
+      return;
+    }
+    const now = performance.now();
+    const dt = Math.min(0.25, Math.max(0, (now - lastTick) / 1000));
+    lastTick = now;
+
+    const trial = state.nbackTrial;
+    let targetExpired = false;
+
+    for (const pt of trial.patients) {
+      pt.remSec = Math.max(0, pt.remSec - dt * state.pace);
+      pt.progress = Math.max(0.06, Math.min(1, 1 - pt.remSec / pt.winSec));
+
+      const clockEl = dom.dossierContainer.querySelector(`[data-nb-clock="${pt.index}"]`);
+      if (clockEl) {
+        const s = Math.max(0, Math.ceil(pt.remSec));
+        const m = Math.floor(s / 60);
+        const rem = s % 60;
+        clockEl.textContent = s <= 0 ? 'CRIT' : `${m}:${String(rem).padStart(2, '0')}`;
+        clockEl.classList.toggle('is-crit', pt.remSec <= 15);
+        clockEl.classList.toggle('is-warn', pt.remSec > 15 && pt.remSec <= 38);
+      }
+
+      const barEl = dom.dossierContainer.querySelector(`[data-nb-bar="${pt.index}"]`);
+      if (barEl) {
+        barEl.style.width = `${Math.round(pt.progress * 100)}%`;
+        barEl.classList.toggle('is-crit', pt.remSec <= 15);
+        barEl.classList.toggle('is-warn', pt.remSec > 15 && pt.remSec <= 38);
+        barEl.classList.toggle('is-ok', pt.remSec > 38);
+      }
+
+      if (pt.remSec <= 0 && (trial.verdict === pt.index || trial.isClash)) {
+        targetExpired = true;
+      }
+    }
+
+    if (targetExpired) {
+      submitNBackRound({ timedOut: true });
+    }
+  }, 120);
+}
+
 function advanceNBackTrial() {
+  clearDebriefTimer();
+  stopNBackClock();
   if (state.session && state.session.isComplete()) {
     endShiftSummary();
     return;
   }
   state.nbackTrial = state.nbackStream.nextTrial();
-  state.nbackAnswers = { valid: true, samePattern: false, sameDomain: false, sameLead: false };
+  state.nbackAnswers = { verdict: null, samePhase: false, sameTarget: false, sameDomain: false };
+  state.nbackDebrief = null;
   state.trialStartTs = performance.now();
   updateHud();
   renderCurrentNBack();
+  startNBackClock();
 }
 
 function renderCurrentNBack() {
@@ -548,52 +619,101 @@ function renderCurrentNBack() {
   renderNBackView(dom.dossierContainer, {
     trial: state.nbackTrial,
     answers: state.nbackAnswers,
-    lastFeedback: state.nbackFeedback,
-    onChoose: (field, val) => {
+    debrief: state.nbackDebrief,
+    climbProgress: state.nbackStream ? state.nbackStream.progressText() : `${state.nbackLevel}-Back`,
+    isLastCase: !!(state.session && state.session.isComplete()),
+    holdDebrief: state.holdDebrief,
+    onChooseVerdict: (val) => {
+      if (state.nbackDebrief) return;
+      state.nbackAnswers.verdict = val;
+      audio.playClick();
+      renderCurrentNBack();
+    },
+    onChooseLock: (field, val) => {
+      if (state.nbackDebrief) return;
       state.nbackAnswers[field] = val;
       audio.playClick();
       renderCurrentNBack();
     },
-    onSubmit: () => submitNBackRound(),
+    onSubmit: () => submitNBackRound({ timedOut: false }),
+    onNextRound: () => advanceNBackTrial(),
+    onHoldToggle: () => {
+      state.holdDebrief = !state.holdDebrief;
+      if (state.holdDebrief) clearDebriefTimer();
+      renderCurrentNBack();
+    },
   });
 }
 
-function submitNBackRound() {
-  if (state.screen !== 'playing' || state.setupMode !== 'nback' || !state.nbackTrial) return;
-  const truth = state.nbackTrial.truth;
-  const elapsedMs = Math.max(100, performance.now() - state.trialStartTs);
-
-  if (truth.isEncoding) {
-    const ok = state.nbackAnswers.valid === truth.valid;
-    state.nbackFeedback = {
-      correct: ok ? 1 : 0,
-      total: 1,
-      perfect: ok,
-      note: truth.valid ? 'Encoding round was valid' : 'Encoding round had a 3-line contradiction',
-    };
-    if (ok) audio.playClear(1);
-    else audio.playMiss();
-    advanceNBackTrial();
+function submitNBackRound({ timedOut = false } = {}) {
+  if (state.screen !== 'playing' || state.setupMode !== 'nback' || !state.nbackTrial || state.nbackDebrief) {
     return;
   }
+  if (!timedOut && state.nbackAnswers.verdict === null) return;
 
-  let correct = 0;
-  if (state.nbackAnswers.valid === truth.valid) correct++;
-  if (state.nbackAnswers.samePattern === truth.samePattern) correct++;
-  if (state.nbackAnswers.sameDomain === truth.sameDomain) correct++;
-  if (state.nbackAnswers.sameLead === truth.sameLead) correct++;
+  stopNBackClock();
+  const trial = state.nbackTrial;
+  const truth = trial.truth;
+  const elapsedMs = Math.max(100, performance.now() - state.trialStartTs);
 
-  state.session.recordNBackTrial({ correctCount: correct, totalChecks: 4, elapsedMs });
-  state.nbackFeedback = {
+  const verdictCorrect = !timedOut && state.nbackAnswers.verdict === truth.verdict;
+  let correct = verdictCorrect ? 1 : 0;
+  let totalChecks = 1;
+  const checks = { samePhase: null, sameTarget: null, sameDomain: null };
+
+  if (!truth.isEncoding) {
+    totalChecks = 4;
+    checks.samePhase = !timedOut && state.nbackAnswers.samePhase === truth.samePhase;
+    checks.sameTarget = !timedOut && state.nbackAnswers.sameTarget === truth.sameTarget;
+    checks.sameDomain = !timedOut && state.nbackAnswers.sameDomain === truth.sameDomain;
+    if (checks.samePhase) correct++;
+    if (checks.sameTarget) correct++;
+    if (checks.sameDomain) correct++;
+  }
+
+  const perfect = correct === totalChecks;
+  trial.resultPerfect = perfect;
+
+  const ladderEvent = !truth.isEncoding ? state.nbackStream.recordRoundResult(perfect) : null;
+
+  state.session.recordNBackTrial({
+    trial,
+    correctCount: correct,
+    totalChecks,
+    elapsedMs,
+    peakLevel: state.nbackStream.peakLevel,
+  });
+
+  state.nbackDebrief = {
+    timedOut,
+    verdictCorrect,
     correct,
-    total: 4,
-    perfect: correct === 4,
-    note: truth.samePattern ? 'Structure matched N-back' : 'Structure differed from N-back',
+    total: totalChecks,
+    perfect,
+    elapsedMs,
+    checks,
+    ladderEvent,
   };
-  if (correct === 4) audio.playClear(state.session.currentStreak);
-  else audio.playMiss();
 
-  advanceNBackTrial();
+  if (ladderEvent?.type === 'promoted') {
+    audio.playPromote();
+  } else if (perfect) {
+    audio.playClear(state.session.currentStreak);
+  } else {
+    audio.playMiss();
+  }
+
+  updateHud();
+  renderCurrentNBack();
+
+  if (!state.holdDebrief) {
+    const delayMs = perfect ? 5600 : 7800;
+    state.debriefTimer = setTimeout(() => {
+      if (state.screen === 'playing' && state.nbackDebrief) {
+        advanceNBackTrial();
+      }
+    }, delayMs);
+  }
 }
 
 // =========================================================================
@@ -601,6 +721,7 @@ function submitNBackRound() {
 // =========================================================================
 function endShiftSummary() {
   clearDebriefTimer();
+  stopNBackClock();
   const snap = state.session ? state.session.snapshot() : null;
   if (!snap) {
     setScreen('title');
@@ -609,7 +730,7 @@ function endShiftSummary() {
 
   dom.summaryHeadline.textContent =
     snap.mode === 'nback'
-      ? `Climb the Ladder (${snap.nbackLevel}-Back) Complete`
+      ? `Climb the Ladder · Peak ${snap.peakNBackLevel || snap.nbackLevel}-Back Complete`
       : snap.cleared >= Math.max(1, Math.ceil(snap.total * 0.7))
         ? 'Shift Complete · Strong Clinical Judgment'
         : 'Shift Review · Reasoning Breakdown';
@@ -826,17 +947,26 @@ window.addEventListener('keydown', (e) => {
 
   if (state.setupMode === 'nback') {
     const k = e.key.toLowerCase();
-    if (k === 'a') { state.nbackAnswers.valid = true; renderCurrentNBack(); return; }
-    if (k === 's') { state.nbackAnswers.valid = false; renderCurrentNBack(); return; }
-    if (k === 'd') { state.nbackAnswers.samePattern = true; renderCurrentNBack(); return; }
-    if (k === 'f') { state.nbackAnswers.samePattern = false; renderCurrentNBack(); return; }
-    if (k === 'h') { state.nbackAnswers.sameDomain = true; renderCurrentNBack(); return; }
-    if (k === 'j') { state.nbackAnswers.sameDomain = false; renderCurrentNBack(); return; }
-    if (k === 'k') { state.nbackAnswers.sameLead = true; renderCurrentNBack(); return; }
-    if (k === 'l') { state.nbackAnswers.sameLead = false; renderCurrentNBack(); return; }
-    if (e.key === ' ' || e.key === 'Enter' || k === 'n') {
+    if (state.nbackDebrief) {
+      if (e.key === ' ' || e.key === 'Enter' || k === 'n') {
+        e.preventDefault();
+        advanceNBackTrial();
+      }
+      return;
+    }
+    if (k === '1') { state.nbackAnswers.verdict = 0; audio.playClick(); renderCurrentNBack(); return; }
+    if (k === '2') { state.nbackAnswers.verdict = 1; audio.playClick(); renderCurrentNBack(); return; }
+    if (k === '3') { state.nbackAnswers.verdict = 2; audio.playClick(); renderCurrentNBack(); return; }
+    if (k === '4') { state.nbackAnswers.verdict = 'clash'; audio.playClick(); renderCurrentNBack(); return; }
+    if (k === 'a') { state.nbackAnswers.samePhase = true; audio.playClick(); renderCurrentNBack(); return; }
+    if (k === 's') { state.nbackAnswers.samePhase = false; audio.playClick(); renderCurrentNBack(); return; }
+    if (k === 'd') { state.nbackAnswers.sameTarget = true; audio.playClick(); renderCurrentNBack(); return; }
+    if (k === 'f') { state.nbackAnswers.sameTarget = false; audio.playClick(); renderCurrentNBack(); return; }
+    if (k === 'h') { state.nbackAnswers.sameDomain = true; audio.playClick(); renderCurrentNBack(); return; }
+    if (k === 'j') { state.nbackAnswers.sameDomain = false; audio.playClick(); renderCurrentNBack(); return; }
+    if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
-      submitNBackRound();
+      submitNBackRound({ timedOut: false });
     }
     return;
   }

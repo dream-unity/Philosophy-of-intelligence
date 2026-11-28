@@ -101,7 +101,7 @@
             <span class="tm-radio-dot" aria-hidden="true"></span>
             <span class="tm-diff-copy">
               <strong>Climb the Ladder</strong>
-              <span>N-back version of Trauma Doctor. Match 3 nested clinical briefings across N rounds and catch hidden clashes.</span>
+              <span>Adaptive 1-Back to 6-Back across all 80 clinical reasoning patterns. Make the live bedside call while tracking Phase, Target &amp; Domain N rounds back.</span>
             </span>
           </button>
 
@@ -181,7 +181,7 @@
           </div>
 
           <div class="tm-control-col" id="nback-control-col" hidden>
-            <label class="tm-section-kicker" for="nback-select">N-Back depth</label>
+            <label class="tm-section-kicker" for="nback-select">Starting N-Back depth</label>
             <select id="nback-select" class="tm-select tm-nback-select">
               <option value="1">1-Back · Immediate</option>
               <option value="2" selected>2-Back · Standard</option>
@@ -190,7 +190,7 @@
               <option value="5">5-Back · High Load</option>
               <option value="6">6-Back · Maximum</option>
             </select>
-            <span class="tm-input-hint">Compare current briefing with N rounds back</span>
+            <span class="tm-input-hint">4 perfect rounds climb +1 Back; 2 misses step down</span>
           </div>
         </div>
 
@@ -250,6 +250,7 @@
         <li><strong>Direct ward interaction:</strong> Each of the 10 bays shows a live emergency condition and its own countdown clock. Click any bay (or press keys <strong>1–9, 0</strong>) to treat before a target reaches the redline. <strong>Right-click</strong> (or Shift+Click) a bay to rule them out.</li>
         <li><strong>Smart chart tools &amp; cross-highlighting:</strong> Hover any bay or patient name to highlight every mention across all six charts at once. Use the toolbar to re-sort charts <strong>By Time</strong> or <strong>By Wing</strong> whenever a directive compares timestamps or wings.</li>
         <li><strong>Disputed charts (Tiers 4–6):</strong> Charts marked <strong>?</strong> have an alternate reading. Click <strong>? Test Flip</strong> on a chart to preview its alternate version and watch the Cross-Checks update live with ✓ / ✕ indicators until every check passes.</li>
+        <li><strong>Climb the Ladder (Adaptive N-Back):</strong> Rotates cold through all 80 clinical reasoning patterns across live 3-patient crises. Pick the right patient or flag a <strong>Clinical Clash</strong> (keys <strong>1–4</strong>) while matching Phase (<strong>A/S</strong>), Target (<strong>D/F</strong>), and Domain (<strong>H/J</strong>) against N rounds back—4 perfect rounds climb +1 Back.</li>
       </ul>
       <div class="tm-modal-actions">
         <button type="button" class="tm-btn tm-btn-primary" id="close-guide-btn">Got It</button>
