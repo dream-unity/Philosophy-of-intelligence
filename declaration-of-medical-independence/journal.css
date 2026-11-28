@@ -1,0 +1,65 @@
+.journal-editor {
+  --jr-ink: #203b35;
+  --jr-accent: #924329;
+  --jr-rule: #cec7b8;
+  --jr-muted: #536259;
+  --jr-paper: #fffdf6;
+  display: grid;
+  grid-template-columns: minmax(10.5rem, .83fr) minmax(0, 2.1fr);
+  color: var(--jr-ink);
+  border: 1px solid var(--jr-rule);
+  border-radius: .65rem;
+  overflow: hidden;
+  background: var(--jr-paper);
+}
+.journal-editor *, .journal-editor *::before, .journal-editor *::after { box-sizing: border-box; }
+.journal-editor [hidden] { display: none !important; }
+.journal-editor .jr-shelf { padding: 1rem; background: #f1ede1; border-inline-end: 1px solid var(--jr-rule); min-width: 0; }
+.journal-editor .jr-shelf-bar, .journal-editor .jr-footer, .journal-editor .jr-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.journal-editor .jr-shelf-bar { justify-content: space-between; margin-bottom: .65rem; }
+.journal-editor .jr-shelf-title { margin: 0; font: 600 1.12rem/1.2 Georgia, serif; color: var(--jr-ink); }
+.journal-editor button { font: inherit; line-height: 1.2; cursor: pointer; }
+.journal-editor .jr-add, .journal-editor .jr-cancel, .journal-editor .jr-confirm-delete, .journal-editor .jr-remove {
+  min-height: 2.5rem; padding: .35rem .7rem; border: 1px solid var(--jr-rule); border-radius: .35rem;
+  font: 600 .83rem/1.3 system-ui, sans-serif; background: var(--jr-paper); color: var(--jr-ink);
+}
+.journal-editor .jr-add { color: #fffdf6; background: var(--jr-ink); border-color: var(--jr-ink); }
+.journal-editor .jr-add:hover { background: #345349; }
+.journal-editor .jr-remove { color: var(--jr-accent); border-color: transparent; background: transparent; }
+.journal-editor .jr-remove:hover, .journal-editor .jr-cancel:hover { border-color: var(--jr-accent); }
+.journal-editor .jr-confirm-delete { color: #fff; border-color: var(--jr-accent); background: var(--jr-accent); }
+.journal-editor .jr-list { max-height: 37rem; overflow-y: auto; margin: 0; padding: .22rem; list-style: none; }
+.journal-editor .jr-list > li { margin: 0; padding: 0; list-style: none; }
+.journal-editor .jr-row {
+  display: grid; gap: .25rem; width: 100%; min-height: 3rem; text-align: start; color: var(--jr-ink);
+  padding: .65rem .55rem; border: 1px solid transparent; border-inline-start: 3px solid transparent; border-radius: .22rem;
+  background: transparent; overflow-wrap: anywhere;
+}
+.journal-editor .jr-row:hover { background: #f9f6ed; }
+.journal-editor .jr-row[aria-current="true"] { border-inline-start-color: var(--jr-accent); background: var(--jr-paper); }
+.journal-editor .jr-row-name { font: 600 .98rem/1.3 Georgia, serif; }
+.journal-editor .jr-date, .journal-editor .jr-stamp, .journal-editor .jr-empty { font: .78rem/1.5 system-ui, sans-serif; color: var(--jr-muted); }
+.journal-editor .jr-empty { margin: 1rem .25rem; }
+.journal-editor .jr-paper { min-width: 0; padding: clamp(1rem, 2.4vw, 1.8rem); }
+.journal-editor .jr-label { display: block; color: var(--jr-muted); font: 600 .77rem/1.4 system-ui, sans-serif; margin: 0 0 .35rem; }
+.journal-editor .jr-title, .journal-editor .jr-body { display: block; width: 100%; color: var(--jr-ink); background: var(--jr-paper); }
+.journal-editor .jr-title {
+  min-height: 2.75rem; padding: .2rem .2rem .5rem; margin: 0 0 1.1rem; border: 0; border-bottom: 1px solid var(--jr-rule); border-radius: 0;
+  font: 500 clamp(1.23rem, 2.6vw, 1.55rem)/1.3 Georgia, serif;
+}
+.journal-editor .jr-title::placeholder { color: #6d7467; opacity: 1; }
+.journal-editor .jr-body {
+  min-height: 14rem; padding: .55rem .45rem; border: 1px solid var(--jr-rule); border-radius: .3rem; resize: vertical;
+  font: 1.03rem/1.65 Georgia, serif; letter-spacing: .003em;
+}
+.journal-editor .jr-footer { min-height: 2.75rem; margin-top: .6rem; justify-content: space-between; }
+.journal-editor .jr-stamp { margin: 0; }
+.journal-editor .jr-warning { color: var(--jr-accent); font: 500 .84rem/1.4 system-ui, sans-serif; }
+.journal-editor :is(button, input, textarea):focus-visible { outline: 2px solid #48766f; outline-offset: 2px; }
+@media (max-width: 630px) {
+  .journal-editor { grid-template-columns: minmax(0, 1fr); }
+  .journal-editor .jr-shelf { border-inline-end: 0; border-bottom: 1px solid var(--jr-rule); padding: .7rem .85rem; }
+  .journal-editor .jr-list { max-height: 9.7rem; }
+  .journal-editor .jr-empty { margin: .2rem; }
+  .journal-editor .jr-body { min-height: 12rem; }
+}

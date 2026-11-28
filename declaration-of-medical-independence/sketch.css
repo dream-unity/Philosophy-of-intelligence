@@ -1,0 +1,61 @@
+.decl-sketch {
+  --ds-rule: #c6c2b7;
+  --ds-ink-main: #263b39;
+  color: var(--ds-ink-main);
+  min-width: 0;
+}
+.decl-sketch .ds-tools, .decl-sketch .ds-actions, .decl-sketch .ds-colours, .decl-sketch .ds-size {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+.decl-sketch .ds-tools { gap: .5rem .85rem; margin: 0 0 .55rem; }
+.decl-sketch .ds-actions { margin-inline-start: auto; }
+.decl-sketch .ds-tools button, .decl-sketch .ds-tools select {
+  font: inherit;
+  font-size: .85rem;
+  color: var(--ds-ink-main);
+  background: #fffdf7;
+  border: 1px solid var(--ds-rule);
+  border-radius: 5px;
+  min-height: 36px;
+  padding: .3rem .58rem;
+  cursor: pointer;
+}
+.decl-sketch .ds-size { font-size: .85rem; }
+.decl-sketch .ds-tools button:disabled { opacity: .45; cursor: default; }
+.decl-sketch .ds-tools button:focus-visible, .decl-sketch .ds-tools select:focus-visible, .decl-sketch .ds-paper svg:focus-visible {
+  outline: 3px solid #407386;
+  outline-offset: 2px;
+}
+.decl-sketch .ds-tools button.ds-colour { min-width: 36px; display: grid; place-items: center; padding: 0; }
+.decl-sketch .ds-colour::before { content: ''; width: 1rem; height: 1rem; background: var(--ds-ink); border-radius: 50%; }
+.decl-sketch .ds-colour[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--ds-ink-main); }
+.decl-sketch .ds-paper {
+  width: min(100%, 43rem);
+  border: 1px solid var(--ds-rule);
+  border-radius: 6px;
+  background: #fffdf7;
+  overflow: hidden;
+}
+.decl-sketch .ds-paper:focus-within { outline: 2px solid #407386; outline-offset: 1px; }
+.decl-sketch .ds-paper svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 8 / 5;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: crosshair;
+}
+.decl-sketch .ds-status, .decl-sketch .ds-keyhelp { margin: .45rem 0; font-size: .85rem; }
+.decl-sketch .ds-status:empty { display: none; }
+.decl-sketch .ds-keyhelp { display: none; }
+.decl-sketch .ds-paper:focus-within + .ds-keyhelp { display: block; }
+@media (max-width: 620px) {
+  .decl-sketch .ds-actions { margin-inline-start: 0; }
+  .decl-sketch .ds-tools button, .decl-sketch .ds-tools select { min-height: 40px; }
+  .decl-sketch .ds-tools button.ds-colour { min-width: 40px; }
+}
