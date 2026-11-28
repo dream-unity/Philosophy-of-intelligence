@@ -1,10 +1,11 @@
-// 2D Canvas Trauma Ward simulation & renderer.
-// Renders 10 patient bays in two compact clinical rows (5 Upper Resuscitation bays +
-// 5 Lower Intake bays) with live scrolling ECG waveforms, dynamic BPM & trauma tags,
-// right-click ruled-out markers, live cross-highlight glow, expanding shockwaves,
-// and floating +SAVED! / CRASH! callouts.
+// 2D Canvas Trauma Ward live telemetry wall.
+// Desktop (>= 900px): 2 Columns x 5 Rows (Left Wall: Resus Bays 01-05 | Right Wall: Intake Bays 06-10),
+// preserving exact 1↔6, 2↔7, 3↔8, 4↔9, 5↔10 corridor adjacency while showing each patient's
+// phase-specific medical emergency, live ticking countdown (huge 0:24..1:56 variation), live BPM,
+// ECG waveform, urgency bar, ruled-out marker, hover highlight glow, shockwaves, and floating callouts.
+// Mobile / wide-strip fallback: 5 Columns x 2 Rows automatically when canvas aspect is wide.
 
-import { PATIENTS } from './roster.js';
+import { PATIENTS, getPatientCondition } from './roster.js';
 
 const BAY_ACCENTS = Object.freeze([
   '#2dd4bf', // surgical teal
@@ -14,7 +15,27 @@ const BAY_ACCENTS = Object.freeze([
   '#fbbf24', // triage amber
 ]);
 
-const BASE_PACE_SECONDS = Object.freeze([42, 46, 50, 54, 58, 62, 66, 70, 74, 78]);
+// Wide, authentic clinical countdown spread (~24s urgent to ~116s stable at 1x speed).
+// Shuffled independently across all 10 patients per case so countdowns vary dramatically with zero target leakage.
+const WIDE_COUNTDOWN_SLOTS = Object.freeze([
+  { rem: 24, win: 78 },  // ~69% filled -> urgent amber
+  { rem: 30, win: 78 },  // ~62% filled -> urgent amber
+  { rem: 37, win: 80 },  // ~54% filled -> warning amber
+  { rem: 45, win: 82 },  // ~45% filled -> rising sky
+  { rem: 55, win: 86 },  // ~36% filled -> moderate sky
+  { rem: 66, win: 92 },  // ~28% filled -> steady teal
+  { rem: 78, win: 98 },  // ~20% filled -> steady teal
+  { rem: 91, win: 108 }, // ~16% filled -> stable teal
+  { rem: 104, win: 116 },// ~10% filled -> stable teal
+  { rem: 116, win: 126 },// ~8% filled  -> stable teal
+]);
+
+function formatCountdown(sec) {
+  const s = Math.max(0, Math.ceil(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
 
 export class TraumaWardScene {
   constructor(canvas, { onSelectPatient, onTimeout, onLayout } = {}) {
@@ -24,11 +45,13 @@ export class TraumaWardScene {
     this.onTimeout = onTimeout || (() => {});
     this.onLayout = onLayout || (() => {});
 
-    this.width = 960;
-    this.height = 174;
+    this.width = 400;
+    this.height = 560;
     this.dpr = 1;
+    this.orientation = 'vertical'; // 'vertical' (2x5) | 'horizontal' (5x2)
 
     this.mode = 'title'; // 'title' | 'playing' | 'debrief' | 'paused' | 'nback'
+    this.currentPhase = 'before';
     this.paceMultiplier = 1.0;
     this.highlightedPatientId = null;
     this.reducedMotion =
@@ -37,27 +60,30 @@ export class TraumaWardScene {
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // 10 patient bay entities
-    this.bays = PATIENTS.map((p, i) => ({
-      index: i,
-      patient: p,
-      row: i < 5 ? 0 : 1,
-      col: i % 5,
-      x: 0,
-      y: 0,
-      w: 160,
-      h: 66,
-      progress: 0,
-      durationSec: BASE_PACE_SECONDS[i],
-      accent: BAY_ACCENTS[i % BAY_ACCENTS.length],
-      ecgPhase: i * 1.17,
-      state: 'active', // 'active' | 'saved' | 'missed' | 'target-missed' | 'rival' | 'dim'
-      isTarget: false,
-      flashTimer: 0,
-      flashColor: '#2dd4bf',
-      hovered: false,
-      ruledOut: false,
-      inShortlist: true,
-    }));
+    this.bays = PATIENTS.map((p, i) => {
+      const slot = WIDE_COUNTDOWN_SLOTS[i];
+      return {
+        index: i,
+        patient: p,
+        condition: getPatientCondition(p.id, 'before'),
+        x: 0,
+        y: 0,
+        w: 170,
+        h: 96,
+        remainingSec: slot.rem,
+        windowSec: slot.win,
+        progress: 1 - slot.rem / slot.win,
+        accent: BAY_ACCENTS[i % BAY_ACCENTS.length],
+        ecgPhase: i * 1.17,
+        state: 'active', // 'active' | 'saved' | 'missed' | 'target-missed' | 'rival' | 'dim'
+        isTarget: false,
+        flashTimer: 0,
+        flashColor: '#2dd4bf',
+        hovered: false,
+        ruledOut: false,
+        inShortlist: true,
+      };
+    });
 
     // Zero-GC particle ring buffer
     this.particles = Array.from({ length: 56 }, () => ({
@@ -73,9 +99,7 @@ export class TraumaWardScene {
     }));
     this.particleCursor = 0;
 
-    // Expanding stabilization/alert shockwave rings
     this.rings = [];
-    // Floating feedback callouts (+SAVED!, ✕ MISS)
     this.popups = [];
 
     this.elapsedTime = 0;
@@ -131,7 +155,7 @@ export class TraumaWardScene {
     const gctx = g.getContext('2d');
     gctx.fillStyle = '#0c131d';
     gctx.fillRect(0, 0, this.width, this.height);
-    gctx.strokeStyle = 'rgba(148, 163, 184, 0.06)';
+    gctx.strokeStyle = 'rgba(148, 163, 184, 0.055)';
     gctx.lineWidth = 1;
     const step = 24;
     gctx.beginPath();
@@ -148,28 +172,65 @@ export class TraumaWardScene {
   }
 
   _layoutBays() {
+    // Vertical 2x5 ICU corridor wall on desktop side-by-side layout; horizontal 5x2 on wide/mobile strips
+    const isVertical = this.height >= this.width * 0.72 && this.height >= 280;
+    this.orientation = isVertical ? 'vertical' : 'horizontal';
+
+    if (isVertical) {
+      const padX = 8;
+      const padTop = 22;
+      const padBottom = 8;
+      const gapX = 8;
+      const gapY = 7;
+      const cols = 2;
+      const rows = 5;
+
+      const availW = this.width - padX * 2 - gapX * (cols - 1);
+      const availH = this.height - padTop - padBottom - gapY * (rows - 1);
+      const cardW = Math.max(90, Math.floor(availW / cols));
+      const cardH = Math.max(58, Math.floor(availH / rows));
+      const totalW = cardW * cols + gapX * (cols - 1);
+      const totalH = cardH * rows + gapY * (rows - 1);
+      const startX = Math.max(padX, Math.floor((this.width - totalW) / 2));
+      const startY = padTop + Math.max(0, Math.floor((availH - totalH) / 2));
+
+      // Column 0 = Bays 1..5 (Resuscitation Wall), Column 1 = Bays 6..10 (Intake Wall)
+      // Preserves exact 1↔6, 2↔7, 3↔8, 4↔9, 5↔10 corridor adjacency!
+      for (const bay of this.bays) {
+        const col = bay.index < 5 ? 0 : 1;
+        const row = bay.index % 5;
+        bay.w = cardW;
+        bay.h = cardH;
+        bay.x = startX + col * (cardW + gapX);
+        bay.y = startY + row * (cardH + gapY);
+      }
+      return;
+    }
+
+    // Horizontal 5x2 strip (mobile or title full-bleed backdrop)
     const compact = this.width < 600;
     const padX = compact ? 6 : Math.max(10, Math.round(this.width * 0.012));
     const padTop = 18;
     const padBottom = 6;
     const gapX = compact ? 5 : Math.max(8, Math.round(this.width * 0.01));
     const gapY = 17;
-
     const cols = 5;
     const rows = 2;
+
     const availW = this.width - padX * 2 - gapX * (cols - 1);
     const availH = this.height - padTop - padBottom - gapY * (rows - 1);
     const cardW = Math.max(52, Math.floor(availW / cols));
     const cardH = Math.max(54, Math.floor(availH / rows));
-
     const totalW = cardW * cols + gapX * (cols - 1);
     const startX = Math.max(padX, Math.floor((this.width - totalW) / 2));
 
     for (const bay of this.bays) {
+      const row = bay.index < 5 ? 0 : 1;
+      const col = bay.index % 5;
       bay.w = cardW;
       bay.h = cardH;
-      bay.x = startX + bay.col * (cardW + gapX);
-      bay.y = padTop + bay.row * (cardH + gapY);
+      bay.x = startX + col * (cardW + gapX);
+      bay.y = padTop + row * (cardH + gapY);
     }
   }
 
@@ -202,23 +263,38 @@ export class TraumaWardScene {
     const shortlistSet = useShortlist ? new Set(trial.shortlist) : null;
     this.timeoutFired = false;
     this.highlightedPatientId = null;
+    this.currentPhase = trial.phase || 'before';
     this.rings.length = 0;
     this.popups.length = 0;
 
-    const paces = BASE_PACE_SECONDS.slice();
-    for (let i = paces.length - 1; i > 0; i--) {
-      const j = (i * 7 + trial.tierRank * 3 + Math.floor(this.elapsedTime * 10)) % (i + 1);
-      [paces[i], paces[j]] = [paces[j], paces[i]];
+    // Shuffle the 10 dramatically varied countdown slots independently across all 10 patients (0% target leakage)
+    const slots = WIDE_COUNTDOWN_SLOTS.map((s) => ({ ...s }));
+    let seed = (trial.tierRank * 997 + Math.floor(this.elapsedTime * 1000) + trial.id.length * 131) >>> 0;
+    const nextRand = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    for (let i = slots.length - 1; i > 0; i--) {
+      const j = Math.floor(nextRand() * (i + 1));
+      [slots[i], slots[j]] = [slots[j], slots[i]];
     }
 
-    const tierFactor = 1 - (trial.tierRank - 1) * 0.045;
+    // Give Tiers 4-6 extra time for coupled 2-SAT cross-checks while keeping the full ~90s spread
+    const tierScale = trial.tierRank >= 4 ? 1.42 : 1 - (trial.tierRank - 1) * 0.04;
 
     this.bays.forEach((bay, i) => {
+      const slot = slots[i];
+      const jitter = Math.round((nextRand() - 0.5) * 4);
+      const rem = Math.max(20, Math.round(slot.rem * tierScale) + jitter);
+      const win = Math.max(rem + 8, Math.round(slot.win * tierScale));
+
+      bay.condition = getPatientCondition(bay.patient.id, this.currentPhase);
       bay.isTarget = targetSet.has(bay.patient.id);
       bay.inShortlist = !shortlistSet || shortlistSet.has(bay.patient.id);
       bay.state = 'active';
-      bay.progress = 0.04 + (i % 3) * 0.025;
-      bay.durationSec = Math.max(24, paces[i] * tierFactor);
+      bay.remainingSec = rem;
+      bay.windowSec = win;
+      bay.progress = Math.max(0.06, Math.min(0.76, 1 - rem / win));
       bay.flashTimer = 0;
       bay.hovered = false;
       bay.ruledOut = false;
@@ -246,17 +322,17 @@ export class TraumaWardScene {
         x: cx,
         y: cy,
         r: 10,
-        maxR: Math.max(bay.w * 0.58, 56),
+        maxR: Math.max(bay.w * 0.52, 54),
         life: 0,
         maxLife: 0.42,
         color: isCorrect ? '#2dd4bf' : '#ef4444',
       });
       this.popups.push({
         x: cx,
-        y: cy - 4,
-        vy: -36,
+        y: bay.y + bay.h * 0.66,
+        vy: -16,
         life: 0,
-        maxLife: 0.72,
+        maxLife: 0.52,
         text: isCorrect ? '+SAVED!' : '✕ WRONG',
         color: isCorrect ? '#5eead4' : '#fca5a5',
       });
@@ -267,6 +343,7 @@ export class TraumaWardScene {
 
   revealDebrief(targets, rivalId) {
     this.highlightedPatientId = null;
+    this.popups.length = 0;
     const targetSet = new Set(targets);
     for (const bay of this.bays) {
       bay.ruledOut = false;
@@ -367,21 +444,24 @@ export class TraumaWardScene {
     for (const bay of this.bays) {
       const rate =
         this.mode === 'playing' && bay.state === 'active'
-          ? 1.85 + bay.progress * 2.9
-          : 1.25;
+          ? 1.7 + bay.progress * 3.1
+          : 1.2;
       bay.ecgPhase += dt * rate;
 
       if (this.mode === 'playing' && bay.state === 'active') {
-        bay.progress += (dt * this.paceMultiplier) / bay.durationSec;
-        if (bay.progress >= 1 && bay.isTarget && !this.timeoutFired) {
+        bay.remainingSec = Math.max(0, bay.remainingSec - dt * this.paceMultiplier);
+        bay.progress = Math.max(0.04, Math.min(1, 1 - bay.remainingSec / bay.windowSec));
+        if (bay.remainingSec <= 0 && bay.isTarget && !this.timeoutFired) {
           bay.progress = 1;
           this.timeoutFired = true;
           this.onTimeout(bay.patient.id);
-        } else if (bay.progress >= 1 && !bay.isTarget) {
-          bay.progress = 0.96;
+        } else if (bay.remainingSec <= 0 && !bay.isTarget) {
+          bay.remainingSec = 0;
+          bay.progress = 0.97;
         }
       } else if (this.mode === 'title') {
-        bay.progress = 0.25 + 0.12 * Math.sin(this.elapsedTime * 0.6 + bay.index * 0.9);
+        const base = WIDE_COUNTDOWN_SLOTS[bay.index];
+        bay.progress = Math.min(0.85, Math.max(0.08, (1 - base.rem / base.win) + 0.04 * Math.sin(this.elapsedTime * 0.6 + bay.index)));
       }
     }
   }
@@ -403,26 +483,20 @@ export class TraumaWardScene {
       ctx.fillRect(0, 0, this.width, this.height);
     }
 
-    // Crisp row headers inside the compact margins
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.72)';
+    // Wall / Row headers
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.78)';
     ctx.font = '700 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const firstUpper = this.bays[0];
-    const firstLower = this.bays[5];
-    if (firstUpper) {
-      ctx.fillText('RESUSCITATION BAYS 01–05', firstUpper.x, Math.max(9, firstUpper.y - 9));
-    }
-    if (firstLower) {
-      ctx.fillText('INTAKE & TRIAGE BAYS 06–10', firstLower.x, firstLower.y - 8);
-    }
+    const b0 = this.bays[0];
+    const b5 = this.bays[5];
 
-    // Right-aligned subtle scratchpad legend in top margin on wide screens
-    if (this.mode === 'playing' && this.width >= 680 && firstUpper) {
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
-      ctx.textAlign = 'right';
-      const rightEdge = this.bays[4].x + this.bays[4].w;
-      ctx.fillText('CLICK / KEYS 1–0: TREAT  ·  RIGHT-CLICK: RULE OUT', rightEdge, Math.max(9, firstUpper.y - 9));
+    if (this.orientation === 'vertical') {
+      if (b0) ctx.fillText('RESUS BAYS 01–05', b0.x, 11);
+      if (b5) ctx.fillText('INTAKE BAYS 06–10', b5.x, 11);
+    } else {
+      if (b0) ctx.fillText('RESUS BAYS 01–05', b0.x, Math.max(9, b0.y - 9));
+      if (b5) ctx.fillText('INTAKE BAYS 06–10', b5.x, b5.y - 8);
     }
 
     for (const bay of this.bays) {
@@ -433,7 +507,7 @@ export class TraumaWardScene {
     for (const ring of this.rings) {
       const alpha = Math.max(0, 1 - ring.life / ring.maxLife);
       ctx.save();
-      ctx.globalAlpha = alpha * 0.7;
+      ctx.globalAlpha = alpha * 0.72;
       ctx.strokeStyle = ring.color;
       ctx.lineWidth = 2.2;
       ctx.beginPath();
@@ -473,58 +547,74 @@ export class TraumaWardScene {
   }
 
   _drawBay(ctx, bay) {
-    const { x, y, w, h, progress, state, hovered, inShortlist, ruledOut } = bay;
+    const { x, y, w, h, progress, remainingSec, state, hovered, inShortlist, ruledOut } = bay;
     const isDimmed = state === 'dim' || (this.mode === 'playing' && (!inShortlist || ruledOut));
+    const isTallCard = h >= 76 && w >= 136;
 
-    let borderColor = 'rgba(148, 163, 184, 0.24)';
+    let borderColor = 'rgba(148, 163, 184, 0.22)';
     let bgFill = '#131d2b';
     let waveColor = bay.accent;
-    const liveBpm = Math.round((bay.patient.baseBpm || 84) + progress * 46);
-    let statusLabel = `${liveBpm} BPM`;
-    let statusColor = '#94a3b8';
+    let barColor = '#2dd4bf';
+    const liveBpm = Math.round((bay.patient.baseBpm || 86) + progress * 48);
+
+    let topRightText =
+      this.mode === 'playing' || isTallCard
+        ? formatCountdown(remainingSec)
+        : `${liveBpm} BPM`;
+    let topRightColor = this.mode === 'debrief' ? '#64748b' : '#cbd5e1';
 
     if (state === 'saved') {
       borderColor = '#2dd4bf';
       bgFill = '#0f292b';
       waveColor = '#2dd4bf';
-      statusLabel = '✓ SAVED';
-      statusColor = '#5eead4';
+      barColor = '#2dd4bf';
+      topRightText = '✓ SAVED';
+      topRightColor = '#5eead4';
     } else if (state === 'target-missed') {
       borderColor = '#38bdf8';
       bgFill = '#102438';
       waveColor = '#38bdf8';
-      statusLabel = '◎ TARGET';
-      statusColor = '#7dd3fc';
+      barColor = '#38bdf8';
+      topRightText = '◎ TARGET';
+      topRightColor = '#7dd3fc';
     } else if (state === 'missed') {
       borderColor = '#ef4444';
       bgFill = '#2a1519';
       waveColor = '#f87171';
-      statusLabel = '✕ WRONG';
-      statusColor = '#fca5a5';
+      barColor = '#ef4444';
+      topRightText = '✕ WRONG';
+      topRightColor = '#fca5a5';
     } else if (state === 'rival') {
       borderColor = '#f59e0b';
       bgFill = '#261e12';
       waveColor = '#fbbf24';
-      statusLabel = '△ RIVAL';
-      statusColor = '#fcd34d';
+      barColor = '#f59e0b';
+      topRightText = '△ RIVAL';
+      topRightColor = '#fcd34d';
     } else if (ruledOut && this.mode === 'playing') {
-      borderColor = 'rgba(148, 163, 184, 0.18)';
+      borderColor = 'rgba(148, 163, 184, 0.16)';
       bgFill = '#0e1621';
       waveColor = '#64748b';
-      statusLabel = '✕ OUT';
-      statusColor = '#64748b';
-    } else if (this.mode === 'playing' && progress >= 0.78) {
-      borderColor = '#ef4444';
-      bgFill = '#20141b';
+      barColor = '#475569';
+      topRightText = '✕ OUT';
+      topRightColor = '#64748b';
+    } else if (this.mode === 'playing' && (remainingSec <= 15 || progress >= 0.78)) {
+      const pulse = 0.55 + 0.45 * Math.sin(this.elapsedTime * 7);
+      borderColor = `rgba(239, 68, 68, ${0.65 + pulse * 0.35})`;
+      bgFill = '#22141a';
       waveColor = '#f87171';
-      statusLabel = `▲ ${liveBpm}`;
-      statusColor = '#fca5a5';
-    } else if (this.mode === 'playing' && progress >= 0.5) {
-      borderColor = '#f59e0b';
+      barColor = '#ef4444';
+      topRightText = remainingSec <= 0 ? 'CRIT' : formatCountdown(remainingSec);
+      topRightColor = '#fca5a5';
+    } else if (this.mode === 'playing' && (remainingSec <= 38 || progress >= 0.52)) {
+      borderColor = 'rgba(245, 158, 11, 0.72)';
       bgFill = '#1c1d22';
       waveColor = '#fbbf24';
-      statusLabel = `◆ ${liveBpm}`;
-      statusColor = '#fcd34d';
+      barColor = '#f59e0b';
+      topRightColor = '#fcd34d';
+    } else if (this.mode === 'playing' && progress >= 0.34) {
+      barColor = '#38bdf8';
+      topRightColor = '#bae6fd';
     }
 
     if (hovered) {
@@ -554,51 +644,70 @@ export class TraumaWardScene {
     const keyNum = bay.index === 9 ? '0' : String(bay.index + 1);
     const isNarrow = w < 118;
     const pad = isNarrow ? 5 : 8;
-    const headerY = y + 13;
+    const row1Y = y + (isTallCard ? 15 : 13);
 
     if (isNarrow) {
       ctx.fillStyle = '#f8fafc';
-      ctx.font = '700 10.5px system-ui, -apple-system, sans-serif';
+      ctx.font = '700 10px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`${keyNum} ${bay.patient.name}`, x + pad, headerY);
+      ctx.fillText(`${keyNum} ${bay.patient.name}`, x + pad, y + 11);
+      if (this.mode === 'playing' || state !== 'active') {
+        ctx.fillStyle = topRightColor;
+        ctx.font = '700 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(topRightText, x + pad, y + 23);
+      }
     } else {
+      // Keycap
       ctx.fillStyle = hovered ? 'rgba(45, 212, 191, 0.25)' : 'rgba(148, 163, 184, 0.14)';
-      this._roundRect(ctx, x + pad, y + 5, 18, 16, 4);
+      this._roundRect(ctx, x + pad, row1Y - 8, 18, 16, 4);
       ctx.fill();
       ctx.fillStyle = hovered ? '#5eead4' : '#cbd5e1';
       ctx.font = '700 10.5px ui-monospace, SFMono-Regular, Menlo, monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(keyNum, x + pad + 9, headerY);
+      ctx.fillText(keyNum, x + pad + 9, row1Y);
 
+      // Patient name
       ctx.fillStyle = '#f8fafc';
       ctx.font = '700 13px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(bay.patient.name, x + pad + 23, headerY);
+      ctx.fillText(bay.patient.name, x + pad + 23, row1Y);
 
-      if (w >= 175 && bay.patient.traumaTag) {
-        const nameW = ctx.measureText(bay.patient.name).width;
-        ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
+      // Live Countdown or Debrief Outcome on top-right
+      ctx.fillStyle = topRightColor;
+      ctx.font = '800 11.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(topRightText, x + w - pad, row1Y);
+
+      // Row 2 (Tall ICU Wall Cards): Real Medical Emergency Condition + Live BPM
+      if (isTallCard) {
+        const row2Y = y + 31;
+        ctx.fillStyle = state === 'active' && !ruledOut ? '#94a3b8' : '#64748b';
+        ctx.font = '600 10.5px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        const maxCondW = w - pad * 2 - 58;
+        let condText = bay.condition;
+        while (condText.length > 6 && ctx.measureText(condText).width > maxCondW) {
+          condText = condText.slice(0, -2) + '…';
+        }
+        ctx.fillText(condText, x + pad, row2Y);
+
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.72)';
         ctx.font = '600 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
-        ctx.fillText(bay.patient.traumaTag, x + pad + 27 + nameW, headerY + 0.5);
-      }
-
-      if (w >= 132) {
-        ctx.fillStyle = statusColor;
-        ctx.font = '700 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
         ctx.textAlign = 'right';
-        ctx.fillText(statusLabel, x + w - pad, headerY);
+        ctx.fillText(`${liveBpm} BPM`, x + w - pad, row2Y);
       }
     }
 
     // Live procedural ECG waveform strip
     const waveX = x + pad;
     const waveW = w - pad * 2;
-    const waveY = y + Math.round(h * 0.56);
-    const waveAmp = Math.max(7, Math.min(13, h * 0.17));
+    const waveY = isTallCard ? y + Math.round(h * 0.64) : y + Math.round(h * 0.56);
+    const waveAmp = isTallCard ? Math.max(8, Math.min(14, h * 0.14)) : Math.max(6, Math.min(11, h * 0.16));
 
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.11)';
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.1)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(waveX, waveY);
@@ -606,27 +715,27 @@ export class TraumaWardScene {
     ctx.stroke();
 
     ctx.strokeStyle = waveColor;
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.65;
     ctx.beginPath();
-    const samples = Math.max(16, Math.floor(waveW / 6));
+    const samples = Math.max(16, Math.floor(waveW / 5));
     for (let s = 0; s <= samples; s++) {
       const u = s / samples;
       const px = waveX + u * waveW;
-      const cycle = (u * 2.2 + bay.ecgPhase * 0.45) % 1;
+      const cycle = (u * 2.1 + bay.ecgPhase * 0.45) % 1;
       let py = waveY;
       if (state === 'missed') {
         py = waveY + Math.sin(u * 20 + bay.ecgPhase) * 1.1;
       } else {
         if (cycle > 0.18 && cycle < 0.24) {
-          py = waveY - Math.sin(((cycle - 0.18) / 0.06) * Math.PI) * waveAmp * 0.22;
+          py -= Math.sin(((cycle - 0.18) / 0.06) * Math.PI) * waveAmp * 0.28;
         } else if (cycle >= 0.30 && cycle < 0.33) {
-          py = waveY + waveAmp * 0.28;
+          py += waveAmp * 0.25;
         } else if (cycle >= 0.33 && cycle < 0.38) {
-          py = waveY - waveAmp * 1.0;
+          py -= Math.sin(((cycle - 0.33) / 0.05) * Math.PI) * waveAmp * 1.12;
         } else if (cycle >= 0.38 && cycle < 0.42) {
-          py = waveY + waveAmp * 0.42;
-        } else if (cycle >= 0.54 && cycle < 0.66) {
-          py = waveY - Math.sin(((cycle - 0.54) / 0.12) * Math.PI) * waveAmp * 0.32;
+          py += waveAmp * 0.38;
+        } else if (cycle >= 0.52 && cycle < 0.64) {
+          py -= Math.sin(((cycle - 0.52) / 0.12) * Math.PI) * waveAmp * 0.32;
         }
       }
       if (s === 0) ctx.moveTo(px, py);
@@ -634,57 +743,46 @@ export class TraumaWardScene {
     }
     ctx.stroke();
 
-    // Diagonal strike line when ruled out by player
-    if (ruledOut && this.mode === 'playing' && state === 'active') {
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.42)';
-      ctx.lineWidth = 1.25;
-      ctx.beginPath();
-      ctx.moveTo(x + 6, y + h - 6);
-      ctx.lineTo(x + w - 6, y + 6);
-      ctx.stroke();
-    }
-
-    // Bottom critical-window progress bar
+    // High-visibility Urgency Countdown Bar
     const barX = x + pad;
     const barY = y + h - 10;
     const barW = w - pad * 2;
     const barH = 4.5;
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.16)';
     this._roundRect(ctx, barX, barY, barW, barH, 2.5);
     ctx.fill();
 
-    const clamped = Math.max(0, Math.min(1, progress));
-    const fillW = Math.max(3, Math.round(barW * clamped));
-    ctx.fillStyle =
-      state === 'saved'
-        ? '#2dd4bf'
-        : state === 'missed' || clamped >= 0.78
-          ? '#ef4444'
-          : clamped >= 0.5
-            ? '#f59e0b'
-            : '#38bdf8';
+    const fillW = Math.max(4, Math.min(barW, barW * progress));
+    ctx.fillStyle = barColor;
     this._roundRect(ctx, barX, barY, fillW, barH, 2.5);
     ctx.fill();
 
-    // 80% critical threshold tick
-    ctx.fillStyle = 'rgba(248, 113, 113, 0.8)';
-    ctx.fillRect(barX + Math.round(barW * 0.8), barY - 1.5, 1.5, barH + 3);
+    // Critical 78% threshold tick
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.65)';
+    ctx.fillRect(barX + barW * 0.78, barY - 1.5, 1.5, barH + 3);
+
+    // Diagonal scratchpad strike when ruled out
+    if (ruledOut && this.mode === 'playing') {
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.38)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x + 8, y + h - 12);
+      ctx.lineTo(x + w - 8, y + 12);
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
 
   _roundRect(ctx, x, y, w, h, r) {
+    const rad = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
     ctx.closePath();
   }
 }

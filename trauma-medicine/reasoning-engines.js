@@ -56,8 +56,8 @@ export const REASONING_ENGINES = {
     },
     order({ ch, role }, sc) {
       return role === 'from'
-        ? `Ward directive: attend to every patient on the initiating (left) side of ${chLabel(sc, ch)}.`
-        : `Ward directive: attend to every patient on the receiving (right) side of ${chLabel(sc, ch)}.`;
+        ? `Ward directive: attend to every patient listed 1st (Lead) of ${chLabel(sc, ch)}.`
+        : `Ward directive: attend to every patient listed 2nd (Compared) of ${chLabel(sc, ch)}.`;
     },
     detail({ ch, role }, sc) {
       return `Each ${chLabel(sc, ch)} line reads "A ${chVerb(sc, ch)} B" — select every ${role === 'from' ? 'A (left)' : 'B (right)'}.`;
@@ -171,10 +171,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { chA: 'triage', chB: 'imaging' };
     },
     order({ chA, chB }, sc) {
-      return `Exclusive check: select patients on the receiving (right) side of EITHER ${chLabel(sc, chA)} or ${chLabel(sc, chB)}, excluding anyone on both.`;
+      return `Exclusive check: select patients listed 2nd (Compared) of EITHER ${chLabel(sc, chA)} or ${chLabel(sc, chB)}, excluding anyone on both.`;
     },
     detail({ chA, chB }, sc) {
-      return `Check the right side of ${chLabel(sc, chA)} and ${chLabel(sc, chB)} — keep exclusive matches only.`;
+      return `Check the Compared (2nd-named) patients of ${chLabel(sc, chA)} and ${chLabel(sc, chB)} — keep exclusive matches only.`;
     },
     evaluate(graph, { chA, chB }) {
       const a = new Set(graph.targetsOf(chA));
@@ -186,12 +186,12 @@ export const REASONING_ENGINES = {
       const b = graph.targetsOf(chB);
       const both = a.filter((id) => b.includes(id));
       return {
-        proof: `Exclusive right-side patients of ${chLabel(sc, chA)} vs ${chLabel(sc, chB)} are ${formatNameList(targets)}.`,
+        proof: `Exclusive Compared (2nd-named) patients of ${chLabel(sc, chA)} vs ${chLabel(sc, chB)} are ${formatNameList(targets)}.`,
         decisiveChannels: [chA, chB],
         rival: buildRival(targets, both.length ? both : [...graph.sourcesOf(chA), ...graph.sourcesOf(chB)], (id) =>
           both.includes(id)
-            ? `${pName(id)} appears on the right side of BOTH channels, violating exclusive-or.`
-            : `${pName(id)} is on the left side rather than the receiving right side.`
+            ? `${pName(id)} appears listed 2nd (Compared) of BOTH charts, violating exclusive-or.`
+            : `${pName(id)} is listed 1st (Lead) rather than the receiving right side.`
         ),
       };
     },
@@ -206,7 +206,7 @@ export const REASONING_ENGINES = {
       return { condA, condB, thenCh, elseCh };
     },
     order({ condA, condB, thenCh, elseCh }, sc) {
-      return `Standing protocol: IF ${chLabel(sc, condA)} occurred earlier than ${chLabel(sc, condB)}, select right-side patients of ${chLabel(sc, thenCh)}; OTHERWISE select left-side patients of ${chLabel(sc, elseCh)}.`;
+      return `Standing protocol: IF ${chLabel(sc, condA)} occurred earlier than ${chLabel(sc, condB)}, select Compared (2nd-named) patients of ${chLabel(sc, thenCh)}; OTHERWISE select Lead (1st-named) patients of ${chLabel(sc, elseCh)}.`;
     },
     detail({ condA, condB }, sc) {
       return `Compare the timestamps of ${chLabel(sc, condA)} and ${chLabel(sc, condB)} first to pick the active branch.`;
@@ -243,10 +243,10 @@ export const REASONING_ENGINES = {
       return pairs.length ? pairs[Math.floor(rng() * pairs.length)] : { fromCh: 'triage', toCh: 'handoff' };
     },
     order({ fromCh, toCh }, sc) {
-      return `Downstream trace: follow A → M in ${chLabel(sc, fromCh)} into M → B in ${chLabel(sc, toCh)} (A ≠ B), and select the downstream patient(s) B.`;
+      return `Downstream trace: follow a 2-step clinical chain from ${chLabel(sc, fromCh)} into ${chLabel(sc, toCh)} (where the 2nd-named patient in ${chLabel(sc, fromCh)} is 1st-named in ${chLabel(sc, toCh)}, distinct endpoints) and select the final Compared patient(s).`;
     },
     detail({ fromCh, toCh }, sc) {
-      return `Match a right-side patient M in ${chLabel(sc, fromCh)} to the same M on the left side of ${chLabel(sc, toCh)}, then select who M leads to.`;
+      return `Match a 2nd-named patient from ${chLabel(sc, fromCh)} to the same patient named 1st in ${chLabel(sc, toCh)}, then select who they are compared ahead of.`;
     },
     evaluate(graph, { fromCh, toCh }) {
       return uniqueSorted(graph.twoHopRelays({ fromChannel: fromCh, toChannel: toCh, distinctEnds: true }).map((r) => r.end));
@@ -281,7 +281,7 @@ export const REASONING_ENGINES = {
       return pairs.length ? pairs[Math.floor(rng() * pairs.length)] : { fromCh: 'labs', toCh: 'consult' };
     },
     order({ fromCh, toCh }, sc) {
-      return `Source trace: work backward from ${chLabel(sc, toCh)} into ${chLabel(sc, fromCh)} (A → M → B, A ≠ B) and select the ORIGIN patient(s) A.`;
+      return `Source trace: trace backward from ${chLabel(sc, toCh)} into ${chLabel(sc, fromCh)} (matching the 1st-named patient of ${chLabel(sc, toCh)} to the 2nd-named patient of ${chLabel(sc, fromCh)}, distinct endpoints) and select the originating Lead patient(s).`;
     },
     detail({ fromCh, toCh }, sc) {
       return `Find M appearing on the left of ${chLabel(sc, toCh)} and the right of ${chLabel(sc, fromCh)}, then select the initiating patient A on the left of ${chLabel(sc, fromCh)}.`;
@@ -319,10 +319,10 @@ export const REASONING_ENGINES = {
       return pairs.length ? pairs[Math.floor(rng() * pairs.length)] : { chA: 'vitals', chB: 'consult' };
     },
     order({ chA, chB }, sc) {
-      return `Connector check: find the middle patient M who sits on the right side of ${chLabel(sc, chA)} and the left side of ${chLabel(sc, chB)} (A → M → B, A ≠ B).`;
+      return `Connector check: find the shared bridge patient who is listed 2nd in ${chLabel(sc, chA)} and listed 1st in ${chLabel(sc, chB)} (linking two distinct patients across charts).`;
     },
     detail({ chA, chB }, sc) {
-      return `Look for A → M in ${chLabel(sc, chA)} paired with M → B in ${chLabel(sc, chB)} (A ≠ B), and select M.`;
+      return `Find the patient listed 2nd in ${chLabel(sc, chA)} who is ALSO listed 1st in ${chLabel(sc, chB)} (linking two distinct patients).`;
     },
     evaluate(graph, { chA, chB }) {
       return uniqueSorted(graph.twoHopRelays({ fromChannel: chA, toChannel: chB, distinctEnds: true }).map((r) => r.mid));
@@ -359,10 +359,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { seedCh: 'triage' };
     },
     order({ seedCh }, sc) {
-      return `Escalation wave: start with right-side patients of ${chLabel(sc, seedCh)} (Wave 1); then follow arrows across all other records to find NEW Wave-2 patients they point to.`;
+      return `Escalation wave: start with Compared (2nd-named) patients of ${chLabel(sc, seedCh)} (Wave 1); then follow clinical comparisons across all other charts where any Wave-1 patient is listed 1st to find NEW Wave-2 Compared patients.`;
     },
     detail({ seedCh }, sc) {
-      return `List Wave 1 (right side of ${chLabel(sc, seedCh)}), then select patients outside Wave 1 who receive an arrow from any Wave-1 patient in another record.`;
+      return `List Wave 1 (listed 2nd in ${chLabel(sc, seedCh)}), then select patients outside Wave 1 who appear listed 2nd behind any Wave-1 patient in another chart.`;
     },
     evaluate(graph, { seedCh }) {
       const wave1 = new Set(graph.targetsOf(seedCh));
@@ -391,11 +391,11 @@ export const REASONING_ENGINES = {
       return { role: rng() < 0.5 ? 'to' : 'from' };
     },
     order({ role }) {
-      const side = role === 'to' ? 'receiving (right)' : 'initiating (left)';
-      return `Ward frequency check: count ${side}-side entries per patient across all 6 records and select everyone tied for the MAXIMUM count.`;
+      const roleText = role === 'to' ? 'Compared (2nd-named)' : 'Lead (1st-named)';
+      return `Ward frequency check: count ${roleText} entries per patient across all 6 charts and select everyone tied for the MAXIMUM count.`;
     },
     detail({ role }) {
-      return `Tally how many arrows ${role === 'to' ? 'point to (right)' : 'start from (left)'} each patient across the whole board; select the highest-count patient(s).`;
+      return `Tally how often each patient appears as ${role === 'to' ? 'Compared (2nd-named)' : 'Lead (1st-named)'} across all 6 charts; select the highest-count patient(s).`;
     },
     evaluate(graph, { role }) {
       const counts = PATIENT_IDS.map((id) => ({
@@ -448,13 +448,13 @@ export const REASONING_ENGINES = {
       if (params.mode === 'opposing') {
         return `Chart clash audit: find any two patients who directly invert each other across two records (A → B in one record, and B → A in another). Select both.`;
       }
-      return `Chart clash audit: find patients whose clinical role flips between units—appearing on the LEFT side in ${sc.sites[0]} AND on the RIGHT side in ${sc.sites[1]}.`;
+      return `Chart clash audit: find patients whose clinical role flips between units—appearing listed 1st (Lead) in ${sc.sites[0]} AND listed 2nd (Compared) in ${sc.sites[1]}.`;
     },
     detail(params, sc) {
       if (params.mode === 'opposing') {
         return `Scan for a reversed pair where one record writes A → B while another writes B → A.`;
       }
-      return `Check ${sc.sites[0]} left-side names against ${sc.sites[1]} right-side names to spot flipped roles.`;
+      return `Check ${sc.sites[0]} Lead (1st-named) names against ${sc.sites[1]} Compared (2nd-named) names to spot flipped roles.`;
     },
     evaluate(graph, params) {
       if (params.mode === 'opposing') {
@@ -502,10 +502,10 @@ export const REASONING_ENGINES = {
     },
     order({ sourceSite }, sc) {
       const otherSite = 1 - sourceSite;
-      return `Unit pattern match: inspect ${sc.sites[sourceSite]} first—is its EARLIEST record heavier (higher Weight) than its LATEST record? Apply that exact timing pattern to ${sc.sites[otherSite]} (pick right-side patients of ${sc.sites[otherSite]}'s EARLIEST record if front-loaded, or LATEST record if escalating).`;
+      return `Unit pattern match: inspect ${sc.sites[sourceSite]} first—is its EARLIEST record heavier (higher Acuity score) than its LATEST record? Apply that exact timing pattern to ${sc.sites[otherSite]} (pick Compared (2nd-named) patients of ${sc.sites[otherSite]}'s EARLIEST record if front-loaded, or LATEST record if escalating).`;
     },
     detail({ sourceSite }, sc) {
-      return `Compare Weight of ${sc.sites[sourceSite]}'s earliest vs latest record (front-loaded vs escalating), then select right-side patients of the matching earliest or latest record in ${sc.sites[1 - sourceSite]}.`;
+      return `Compare Acuity of ${sc.sites[sourceSite]}'s earliest vs latest record (front-loaded vs escalating), then select Compared (2nd-named) patients of the matching earliest or latest record in ${sc.sites[1 - sourceSite]}.`;
     },
     evaluate(graph, { sourceSite }) {
       const srcRecs = graph.records.filter((r) => r.siteIdx === sourceSite).sort((a, b) => a.timeRank - b.timeRank);
@@ -543,7 +543,7 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Opening-unit check: compare the two EARLIEST records (01:00 and 02:00). If they share the SAME Unit, select right-side patients of 01:00; if they are in DIFFERENT Units, select right-side patients of 02:00.`;
+      return `Opening-unit check: compare the two EARLIEST records (01:00 and 02:00). If they share the SAME Unit, select Compared (2nd-named) patients of 01:00; if they are in DIFFERENT Units, select Compared (2nd-named) patients of 02:00.`;
     },
     detail() {
       return `First evaluate the relationship between the 01:00 and 02:00 records (same Unit vs different Units), then select from the resulting record.`;
@@ -562,7 +562,7 @@ export const REASONING_ENGINES = {
       const chosen = sameUnit ? r0 : r1;
       const other = sameUnit ? r1 : r0;
       return {
-        proof: `01:00 (${r0.site}) and 02:00 (${r1.site}) are in ${sameUnit ? 'the SAME unit' : 'DIFFERENT units'}, selecting right-side patients of ${chosen.label} (${formatNameList(targets)}).`,
+        proof: `01:00 (${r0.site}) and 02:00 (${r1.site}) are in ${sameUnit ? 'the SAME unit' : 'DIFFERENT units'}, selecting Compared (2nd-named) patients of ${chosen.label} (${formatNameList(targets)}).`,
         decisiveChannels: [r0.channelId, r1.channelId],
         rival: buildRival(targets, graph.targetsOf(other.channelId), (id) => `${pName(id)} comes from ${other.label}, the unselected half of the unit comparison.`),
       };
@@ -577,13 +577,13 @@ export const REASONING_ENGINES = {
     },
     order({ dir }) {
       return dir === 'top'
-        ? `Ward role scan: find pure initiators—patients who appear on the LEFT side at least once, and NEVER on the right side anywhere on the board.`
-        : `Ward role scan: find pure recipients—patients who appear on the RIGHT side at least once, and NEVER on the left side anywhere on the board.`;
+        ? `Ward role scan: find pure Lead patients—patients listed 1st at least once who NEVER appear as Compared (2nd-named) on any chart.`
+        : `Ward role scan: find pure Compared patients—patients listed 2nd at least once who NEVER appear as Lead (1st-named) on any chart.`;
     },
     detail({ dir }) {
       return dir === 'top'
-        ? `Scan all 6 records: select patients with ≥ 1 left-side entry and 0 right-side entries.`
-        : `Scan all 6 records: select patients with ≥ 1 right-side entry and 0 left-side entries.`;
+        ? `Scan all 6 records: select patients with ≥ 1 Lead (1st-named) entry and 0 Compared (2nd-named) entries.`
+        : `Scan all 6 records: select patients with ≥ 1 Compared (2nd-named) entry and 0 Lead (1st-named) entries.`;
     },
     evaluate(graph, { dir }) {
       return uniqueSorted(
@@ -599,8 +599,8 @@ export const REASONING_ENGINES = {
       return {
         proof:
           dir === 'top'
-            ? `${formatNameList(targets)} appear exclusively on the initiating (left) side with zero incoming arrows.`
-            : `${formatNameList(targets)} appear exclusively on the receiving (right) side with zero outgoing arrows.`,
+            ? `${formatNameList(targets)} appear exclusively listed 1st (Lead) with zero Compared (2nd-named) entries.`
+            : `${formatNameList(targets)} appear exclusively listed 2nd (Compared) with zero Lead (1st-named) entries.`,
         decisiveChannels: CHANNEL_IDS.slice(),
         rival: buildRival(targets, mixed, (id) => `${pName(id)} appears on both left and right sides, so they are not a pure ${dir === 'top' ? 'top-level initiator' : 'terminal recipient'}.`),
       };
@@ -611,31 +611,31 @@ export const REASONING_ENGINES = {
   'spatial-bay-adjacency': {
     usesWeights: false,
     pickParams(rng, graph) {
-      // Check if any record connects patients in the SAME bay row (Upper 1-5 vs Lower 6-10)
+      // Check if any record connects patients in the SAME bay chart (Upper 1-5 vs Lower 6-10)
       const ch = CHANNEL_IDS[Math.floor(rng() * CHANNEL_IDS.length)];
-      const row = rng() < 0.5 ? 'upper' : 'lower';
-      return { ch, row };
+      const chart = rng() < 0.5 ? 'upper' : 'lower';
+      return { ch, chart };
     },
-    order({ ch, row }, sc) {
-      const rowLabel = row === 'upper' ? 'UPPER Resuscitation Row (Bays 1–5)' : 'LOWER Intake Row (Bays 6–10)';
+    order({ ch, chart }, sc) {
+      const rowLabel = chart === 'upper' ? 'Resuscitation Wall (Bays 1–5)' : 'Intake Wall (Bays 6–10)';
       return `Ward floor check: look at the physical monitor layout and select every patient named in ${chLabel(sc, ch)} who occupies the ${rowLabel}.`;
     },
-    detail({ ch, row }, sc) {
-      return `Check ${chLabel(sc, ch)}, then look up at the bay numbers on the ward monitor—keep only patients in ${row === 'upper' ? 'Bays 1–5 (Nadia–Maren)' : 'Bays 6–10 (Tomas–Rory)'}.`;
+    detail({ ch, chart }, sc) {
+      return `Check ${chLabel(sc, ch)}, then check the bay numbers on the left ward monitor—keep only patients in ${chart === 'upper' ? 'Bays 1–5 (Nadia–Maren)' : 'Bays 6–10 (Tomas–Rory)'}.`;
     },
-    evaluate(graph, { ch, row }) {
+    evaluate(graph, { ch, chart }) {
       return graph.patientsIn(ch).filter((id) => {
         const bay = pBayNum(id);
-        return row === 'upper' ? bay <= 5 : bay >= 6;
+        return chart === 'upper' ? bay <= 5 : bay >= 6;
       });
     },
-    explain(graph, { ch, row }, sc, targets) {
+    explain(graph, { ch, chart }, sc, targets) {
       const allCh = graph.patientsIn(ch);
       const otherRow = allCh.filter((id) => !targets.includes(id));
       return {
-        proof: `Among patients in ${chLabel(sc, ch)} (${formatNameList(allCh)}), only ${formatNameList(targets)} sit in the ${row === 'upper' ? 'Upper Row (Bays 1–5)' : 'Lower Row (Bays 6–10)'}.`,
+        proof: `Among patients in ${chLabel(sc, ch)} (${formatNameList(allCh)}), only ${formatNameList(targets)} sit in the ${chart === 'upper' ? 'Upper Row (Bays 1–5)' : 'Lower Row (Bays 6–10)'}.`,
         decisiveChannels: [ch],
-        rival: buildRival(targets, otherRow, (id) => `${pName(id)} is in Bay ${pBayNum(id)}, on the opposite row of the trauma floor.`),
+        rival: buildRival(targets, otherRow, (id) => `${pName(id)} is in Bay ${pBayNum(id)}, on the opposite chart of the trauma floor.`),
       };
     },
   },
@@ -698,15 +698,15 @@ export const REASONING_ENGINES = {
     },
     order(params, sc) {
       if (params.compareOnly) {
-        return `Progression check: compare ${chLabel(sc, params.chA)} and ${chLabel(sc, params.chB)} — select right-side patients from whichever occurred LATER.`;
+        return `Progression check: compare ${chLabel(sc, params.chA)} and ${chLabel(sc, params.chB)} — select Compared (2nd-named) patients from whichever occurred LATER.`;
       }
-      return `Progression check: trace a strictly forward-in-time chain from ${chLabel(sc, params.chA)} into ${chLabel(sc, params.chB)} (A → M → B, A ≠ B) and select the next affected patient(s) B.`;
+      return `Progression check: trace a strictly forward-in-time chain from ${chLabel(sc, params.chA)} into ${chLabel(sc, params.chB)} (matching 2nd-named to 1st-named, distinct endpoints) and select the next Compared patient(s).`;
     },
     detail(params, sc) {
       if (params.compareOnly) {
         return `Check timestamps on ${chLabel(sc, params.chA)} and ${chLabel(sc, params.chB)}; the later event predicts current status.`;
       }
-      return `Verify ${chLabel(sc, params.chB)} happened AFTER ${chLabel(sc, params.chA)}, then trace A → M → B and select B.`;
+      return `Confirm ${chLabel(sc, params.chB)} was logged AFTER ${chLabel(sc, params.chA)}, match the 2nd-named patient of ${chLabel(sc, params.chA)} to 1st-named in ${chLabel(sc, params.chB)}, and select the final patient.`;
     },
     evaluate(graph, params) {
       if (params.compareOnly) {
@@ -739,7 +739,7 @@ export const REASONING_ENGINES = {
     },
   },
 
-  // 18. Bayesian / Probabilistic / Proportional / Mathematical / Risk / Optimisation / Decision-Theoretic Weighted Scoring
+  // 18. Bayesian / Probabilistic / Proportional / Mathematical / Risk / Optimisation / Decision-Theoretic Acuityed Scoring
   'bayesian-update': {
     usesWeights: true,
     pickParams(rng, graph) {
@@ -760,10 +760,10 @@ export const REASONING_ENGINES = {
       return { threshold: 5 };
     },
     order({ threshold }) {
-      return `Acuity tally: add the Weight (+1 to +6) of every record where a patient appears on the receiving (right) side, and treat everyone totaling ≥ ${threshold}.`;
+      return `Acuity tally: add the Acuity Score (1–6 pts) of every record where a patient appears listed 2nd (Compared), and treat everyone totaling ≥ ${threshold}.`;
     },
     detail({ threshold }) {
-      return `Look at the Weight (+1..+6) beside each record. Add the weights of all records pointing to a patient (right side) — act if total ≥ ${threshold}.`;
+      return `Look at the Acuity Score (1–6 pts) beside each chart. Add the acuity scores of all charts listing a patient 2nd (Compared) — act if total ≥ ${threshold}.`;
     },
     evaluate(graph, { threshold }) {
       return uniqueSorted(
@@ -785,9 +785,9 @@ export const REASONING_ENGINES = {
         (a, b) => totals[b] - totals[a]
       );
       return {
-        proof: `Summing right-side clinical weights against threshold ≥ ${threshold} selects ${summary}.`,
+        proof: `Summing Compared (2nd-named) clinical acuity scores against threshold ≥ ${threshold} selects ${summary}.`,
         decisiveChannels: CHANNEL_IDS.slice(),
-        rival: buildRival(targets, below, (id) => `${pName(id)}'s updated weight total is +${totals[id]}, below the ≥ ${threshold} action threshold.`),
+        rival: buildRival(targets, below, (id) => `${pName(id)}'s updated Acuity total is +${totals[id]}, below the ≥ ${threshold} action threshold.`),
       };
     },
   },
@@ -804,10 +804,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { keyCh: 'vitals' };
     },
     order({ keyCh }, sc) {
-      return `Single-source check: if ${chLabel(sc, keyCh)} had NEVER run, which of its right-side patients would have ZERO other right-side flags anywhere on the board?`;
+      return `Single-source check: if ${chLabel(sc, keyCh)} had NEVER run, which of its Compared (2nd-named) patients would have ZERO other Compared (2nd-named) flags anywhere on the board?`;
     },
     detail({ keyCh }, sc) {
-      return `Check every right-side patient in ${chLabel(sc, keyCh)} and eliminate anyone who also appears on the right side of another record.`;
+      return `Check every Compared (2nd-named) patient in ${chLabel(sc, keyCh)} and eliminate anyone who also appears listed 2nd (Compared) of another record.`;
     },
     evaluate(graph, { keyCh }) {
       return graph.targetsOf(keyCh).filter((id) => graph.inEdges(id).every((e) => e.channelId === keyCh));
@@ -830,10 +830,10 @@ export const REASONING_ENGINES = {
     },
     order({ role }) {
       const side = role === 'to' ? 'receiving (right)' : 'initiating (left)';
-      return `Independent confirmation: select every patient confirmed on the ${side} side by at least TWO DIFFERENT records with DIFFERENT clinical partners.`;
+      return `Independent confirmation: select every patient confirmed on the ${side === 'to' ? '2nd-named (Compared)' : '1st-named (Lead)'} by at least TWO DIFFERENT records with DIFFERENT clinical partners.`;
     },
     detail({ role }) {
-      return `Require two separate records on the ${role === 'to' ? 'right' : 'left'} side paired with two distinct partners (identical partner echoes do not count).`;
+      return `Require two separate records as ${role === 'to' ? 'Compared (2nd-named)' : 'Lead (1st-named)'} paired with two distinct partners (identical partner echoes do not count).`;
     },
     evaluate(graph, { role }) {
       return uniqueSorted(
@@ -866,10 +866,10 @@ export const REASONING_ENGINES = {
       return { taintedCh, trustedCh };
     },
     order({ taintedCh, trustedCh }, sc) {
-      return `Record quarantine: ${chLabel(sc, taintedCh)} is compromised—set aside anyone named in it. Act on right-side patients of ${chLabel(sc, trustedCh)} who stay uncontaminated.`;
+      return `Record quarantine: ${chLabel(sc, taintedCh)} is compromised—set aside anyone named in it. Act on Compared (2nd-named) patients of ${chLabel(sc, trustedCh)} who stay uncontaminated.`;
     },
     detail({ taintedCh, trustedCh }, sc) {
-      return `Discard anyone appearing on either side of compromised ${chLabel(sc, taintedCh)}; keep clean right-side patients of ${chLabel(sc, trustedCh)}.`;
+      return `Discard anyone appearing on either side of compromised ${chLabel(sc, taintedCh)}; keep clean Compared (2nd-named) patients of ${chLabel(sc, trustedCh)}.`;
     },
     evaluate(graph, { taintedCh, trustedCh }) {
       const tainted = new Set(graph.patientsIn(taintedCh));
@@ -893,11 +893,11 @@ export const REASONING_ENGINES = {
       return { side: rng() < 0.5 ? 'to' : 'from' };
     },
     order({ side }) {
-      const sideText = side === 'to' ? 'right' : 'left';
-      return `Updated chart review: form an initial list from the ${sideText} side of the 01:00 and 02:00 records, then WITHDRAW anyone contradicted by appearing anywhere in the 05:00 or 06:00 records.`;
+      const roleText = side === 'to' ? 'Compared (2nd-named)' : 'Lead (1st-named)';
+      return `Updated chart review: form an initial list from the ${roleText} patients of the 01:00 and 02:00 charts, then WITHDRAW anyone contradicted by appearing anywhere in the 05:00 or 06:00 charts.`;
     },
     detail({ side }) {
-      return `Take provisional candidates from 01:00–02:00 (${side} side), then retract anyone who shows up in the later 05:00–06:00 evidence.`;
+      return `Take provisional candidates from 01:00–02:00 (${side === 'to' ? 'Compared / 2nd-named' : 'Lead / 1st-named'}), then retract anyone who shows up in the later 05:00–06:00 charts.`;
     },
     evaluate(graph, { side }) {
       const early = graph.records.filter((r) => r.timeRank <= 1);
@@ -930,10 +930,10 @@ export const REASONING_ENGINES = {
       return { rivalSite: rng() < 0.5 ? 0 : 1 };
     },
     order({ rivalSite }, sc) {
-      return `Multi-team coordination: another surgical team automatically covers every patient in the EARLIEST record of ${sc.sites[rivalSite]}. Cover the right-side patients of the EARLIEST record of ${sc.sites[1 - rivalSite]} NOT already taken by that team.`;
+      return `Multi-team coordination: another surgical team automatically covers every patient in the EARLIEST record of ${sc.sites[rivalSite]}. Cover the Compared (2nd-named) patients of the EARLIEST record of ${sc.sites[1 - rivalSite]} NOT already taken by that team.`;
     },
     detail({ rivalSite }, sc) {
-      return `Find who the other team takes (earliest record in ${sc.sites[rivalSite]}), then pick uncovered right-side patients from the earliest record in ${sc.sites[1 - rivalSite]}.`;
+      return `Find who the other team takes (earliest record in ${sc.sites[rivalSite]}), then pick uncovered Compared (2nd-named) patients from the earliest record in ${sc.sites[1 - rivalSite]}.`;
     },
     evaluate(graph, { rivalSite }) {
       const otherTeamRec = graph.records
@@ -955,7 +955,7 @@ export const REASONING_ENGINES = {
         .sort((a, b) => a.timeRank - b.timeRank)[0];
       const taken = graph.patientsIn(otherTeamRec.channelId);
       return {
-        proof: `The other team covers ${otherTeamRec.label} (${formatNameList(taken)}); uncovered right-side patients in ${ourRec.label} are ${formatNameList(targets)}.`,
+        proof: `The other team covers ${otherTeamRec.label} (${formatNameList(taken)}); uncovered Compared (2nd-named) patients in ${ourRec.label} are ${formatNameList(targets)}.`,
         decisiveChannels: [otherTeamRec.channelId, ourRec.channelId],
         rival: buildRival(targets, taken, (id) => `${pName(id)} is already covered by the other team's move on ${otherTeamRec.label}.`),
       };
@@ -971,15 +971,15 @@ export const REASONING_ENGINES = {
     },
     order({ chA, chB }, sc, meta) {
       if (meta.id === 'ethical-reasoning') {
-        return `Superseding directive: between ${chLabel(sc, chA)} and ${chLabel(sc, chB)}, the MORE RECENT record overrides the older directive. Select the right-side patients of the later record.`;
+        return `Superseding directive: between ${chLabel(sc, chA)} and ${chLabel(sc, chB)}, the MORE RECENT record overrides the older directive. Select the Compared (2nd-named) patients of the later record.`;
       }
       if (meta.id === 'mentalistic-reasoning') {
-        return `Family update check: families briefed earlier may hold outdated assumptions—select the right-side patients of whichever of ${chLabel(sc, chA)} or ${chLabel(sc, chB)} was updated MORE RECENTLY.`;
+        return `Family update check: families briefed earlier may hold outdated assumptions—select the Compared (2nd-named) patients of whichever of ${chLabel(sc, chA)} or ${chLabel(sc, chB)} was updated MORE RECENTLY.`;
       }
-      return `Latest-record call: compare ${chLabel(sc, chA)} and ${chLabel(sc, chB)}—select the receiving (right-side) patients named in the LATER record.`;
+      return `Latest-record call: compare ${chLabel(sc, chA)} and ${chLabel(sc, chB)}—select the Compared (2nd-named) patients named in the LATER record.`;
     },
     detail({ chA, chB }, sc) {
-      return `Compare timestamps on ${chLabel(sc, chA)} and ${chLabel(sc, chB)}; follow the later record's receiving (right) side.`;
+      return `Compare timestamps on ${chLabel(sc, chA)} and ${chLabel(sc, chB)}; follow the later record's Compared (2nd-named) position.`;
     },
     evaluate(graph, { chA, chB }) {
       const later = graph.timeRankOf(chA) > graph.timeRankOf(chB) ? chA : chB;
@@ -1004,7 +1004,7 @@ export const REASONING_ENGINES = {
     },
     order({ role }, sc) {
       const side = role === 'to' ? 'receiving (right)' : 'initiating (left)';
-      return `Cross-unit overlap: find every patient who appears on the ${side} side in BOTH ${sc.sites[0]} AND ${sc.sites[1]}.`;
+      return `Cross-unit overlap: find every patient who appears on the ${side === 'to' ? '2nd-named (Compared)' : '1st-named (Lead)'} in BOTH ${sc.sites[0]} AND ${sc.sites[1]}.`;
     },
     detail(_, sc) {
       return `Combine across both units: a patient must appear on that side in at least one ${sc.sites[0]} record and at least one ${sc.sites[1]} record.`;
@@ -1024,7 +1024,7 @@ export const REASONING_ENGINES = {
     explain(graph, { role }, sc, targets) {
       const all = uniqueSorted(graph.allEdges.map((e) => (role === 'to' ? e.to : e.from)));
       return {
-        proof: `${formatNameList(targets)} bridge both ${sc.sites[0]} and ${sc.sites[1]} on the ${role === 'to' ? 'right' : 'left'} side.`,
+        proof: `${formatNameList(targets)} bridge both ${sc.sites[0]} and ${sc.sites[1]} as ${role === 'to' ? 'Compared (2nd-named)' : 'Lead (1st-named)'}.`,
         decisiveChannels: CHANNEL_IDS.slice(),
         rival: buildRival(targets, all, (id) => `${pName(id)} only appears on that side in a single unit, not both.`),
       };
@@ -1076,10 +1076,10 @@ export const REASONING_ENGINES = {
       return { siteIdx: rng() < 0.5 ? 0 : 1 };
     },
     order({ siteIdx }, sc) {
-      return `Dual-role check: inside ${sc.sites[siteIdx]} ONLY, select every patient who acts as BOTH initiator (left) AND recipient (right).`;
+      return `Dual-role check: inside ${sc.sites[siteIdx]} ONLY, select every patient who acts as BOTH Lead (1st-named) AND Compared (2nd-named).`;
     },
     detail({ siteIdx }, sc) {
-      return `Look strictly at ${sc.sites[siteIdx]} records—find anyone who appears at least once on the left and at least once on the right.`;
+      return `Look strictly at ${sc.sites[siteIdx]} records—find anyone who appears at least once as Lead (1st-named) and at least once as Compared (2nd-named).`;
     },
     evaluate(graph, { siteIdx }) {
       const left = new Set();
@@ -1112,7 +1112,7 @@ export const REASONING_ENGINES = {
       return { chA, chB };
     },
     order({ chA, chB }, sc) {
-      return `Protocol selector: FIRST inspect 01:00. If 01:00 is in ${sc.sites[0]}, select patients in ${chLabel(sc, chA)} EXCEPT ${chLabel(sc, chB)}; if 01:00 is in ${sc.sites[1]}, select the right side of 01:00.`;
+      return `Protocol selector: FIRST inspect 01:00. If 01:00 is in ${sc.sites[0]}, select patients in ${chLabel(sc, chA)} EXCEPT ${chLabel(sc, chB)}; if 01:00 is in ${sc.sites[1]}, select the Compared (2nd-named) patients of 01:00.`;
     },
     detail() {
       return `Check 01:00's Unit first to determine which ward protocol governs this shift, then apply that exact rule.`;
@@ -1134,7 +1134,7 @@ export const REASONING_ENGINES = {
         : graph.patientsIn(chA).filter((id) => !graph.patientsIn(chB).includes(id));
       return {
         proof: `01:00 (${earliest.label}) is in ${earliest.site}, so you select the ${
-          usedElim ? `Elimination method (${chLabel(sc, chA)} minus ${chLabel(sc, chB)})` : `Chronological Baseline method (right side of ${earliest.label})`
+          usedElim ? `Elimination method (${chLabel(sc, chA)} minus ${chLabel(sc, chB)})` : `Chronological Baseline method (listed 2nd in ${earliest.label})`
         }, yielding ${formatNameList(targets)}.`,
         decisiveChannels: usedElim ? [earliest.channelId, chA, chB] : [earliest.channelId],
         rival: buildRival(targets, otherBranch, (id) => `${pName(id)} would only be chosen if you picked the wrong reasoning method for 01:00's unit.`),
@@ -1142,7 +1142,7 @@ export const REASONING_ENGINES = {
     },
   },
 
-  // 29. Multi-Stage Differential Diagnosis Synthesis (Exclude rule-out + Confirm via Weight threshold)
+  // 29. Multi-Stage Differential Diagnosis Synthesis (Exclude rule-out + Confirm vian Acuity threshold)
   'differential-synthesis': {
     usesWeights: true,
     usesMinutes: false,
@@ -1170,10 +1170,10 @@ export const REASONING_ENGINES = {
         : { ruleOutCh: 'labs', threshold: 5 };
     },
     order({ ruleOutCh, threshold }, sc) {
-      return `Two-step workup: FIRST rule out everyone named in ${chLabel(sc, ruleOutCh)}; among the remaining patients, sum right-side Weights and intervene for anyone reaching ≥ ${threshold}.`;
+      return `Two-step workup: FIRST rule out everyone named in ${chLabel(sc, ruleOutCh)}; among the remaining patients, sum Compared (2nd-named) Acuity scores and intervene for anyone reaching ≥ ${threshold}.`;
     },
     detail({ ruleOutCh, threshold }, sc) {
-      return `Eliminate any patient appearing in ${chLabel(sc, ruleOutCh)}, then confirm survivors whose right-side Weight total is ≥ ${threshold}.`;
+      return `Eliminate any patient appearing in ${chLabel(sc, ruleOutCh)}, then confirm survivors whose Compared (2nd-named) Acuity total is ≥ ${threshold}.`;
     },
     evaluate(graph, { ruleOutCh, threshold }) {
       const excluded = new Set(graph.patientsIn(ruleOutCh));
@@ -1198,11 +1198,11 @@ export const REASONING_ENGINES = {
         (a, b) => totals[b] - totals[a]
       );
       return {
-        proof: `Ruling out ${chLabel(sc, ruleOutCh)} and requiring right-side Weight ≥ ${threshold} confirms ${targets.map((id) => `${pName(id)} (+${totals[id]})`).join(', ')}.`,
+        proof: `Ruling out ${chLabel(sc, ruleOutCh)} and requiring Compared (2nd-named) Acuity ≥ ${threshold} confirms ${targets.map((id) => `${pName(id)} (+${totals[id]})`).join(', ')}.`,
         decisiveChannels: CHANNEL_IDS.slice(),
         rival: buildRival(targets, ruledOutHigh.length ? ruledOutHigh : below, (id) =>
           excluded.has(id)
-            ? `${pName(id)} had weight +${totals[id]} but was ruled out by ${chLabel(sc, ruleOutCh)}.`
+            ? `${pName(id)} had Acuity +${totals[id]} but was ruled out by ${chLabel(sc, ruleOutCh)}.`
             : `${pName(id)} survived elimination but only reached +${totals[id]} (below ≥ ${threshold}).`
         ),
       };
@@ -1214,7 +1214,7 @@ export const REASONING_ENGINES = {
     usesWeights: true,
     usesMinutes: false,
     pickParams(rng, graph) {
-      const rows = PATIENT_IDS.map((id) => {
+      const charts = PATIENT_IDS.map((id) => {
         const edges = graph.inEdges(id);
         const prior = edges
           .filter((e) => graph.byChannel[e.channelId].record.timeRank <= 1)
@@ -1224,10 +1224,10 @@ export const REASONING_ENGINES = {
           .reduce((s, e) => s + graph.byChannel[e.channelId].record.weight, 0);
         return { id, prior, update, posterior: prior + update };
       });
-      const unique = Array.from(new Set(rows.map((r) => r.posterior))).sort((a, b) => b - a);
+      const unique = Array.from(new Set(charts.map((r) => r.posterior))).sort((a, b) => b - a);
       for (const threshold of unique) {
         if (threshold < 5) continue;
-        const hits = rows.filter((r) => r.posterior >= threshold);
+        const hits = charts.filter((r) => r.posterior >= threshold);
         // Prefer thresholds where new evidence (03:00-06:00) meaningfully shifts at least one winner
         if (hits.length >= 1 && hits.length <= 3 && hits.some((h) => h.update > 0)) {
           return { threshold };
@@ -1236,10 +1236,10 @@ export const REASONING_ENGINES = {
       return { threshold: 6 };
     },
     order({ threshold }) {
-      return `Baseline & update: start with each patient's opening acuity (right-side Weight in 01:00–02:00), then add new findings (right-side Weight in 03:00–06:00). Act if updated total ≥ ${threshold}.`;
+      return `Baseline & update: start with each patient's opening acuity (Compared (2nd-named) Acuity in 01:00–02:00), then add new findings (Compared (2nd-named) Acuity in 03:00–06:00). Act if updated total ≥ ${threshold}.`;
     },
     detail({ threshold }) {
-      return `Combine early baseline (01:00–02:00) + newer findings (03:00–06:00) on the right side. Don't anchor on early readings alone—act when updated total ≥ ${threshold}.`;
+      return `Combine early baseline (01:00–02:00) + newer findings (03:00–06:00) listed 2nd (Compared). Don't anchor on early readings alone—act when updated total ≥ ${threshold}.`;
     },
     evaluate(graph, { threshold }) {
       return uniqueSorted(
@@ -1289,10 +1289,10 @@ export const REASONING_ENGINES = {
       return { ratio: 2 };
     },
     order() {
-      return `Severity-to-time check: inspect Severity Weight (+1..+6) vs Procedure Time (1m..6m). Select right-side patients ONLY from records where Severity is at least DOUBLE the Minutes (Weight ≥ 2 × Min).`;
+      return `Severity-to-time check: inspect Acuity Score (1–6 pts) vs Procedure Time (1–6 min). Select Compared (2nd-named) patients ONLY from records where Acuity pts are at least DOUBLE the procedure minutes (pts ≥ 2 × min).`;
     },
     detail() {
-      return `Compare Weight to Minutes on each row (e.g. +4 in 2m = 2× qualifies; +5 in 3m = 1.67× does not). Select right-side patients of qualifying rows.`;
+      return `Compare Acuity pts to Procedure Time on each chart (e.g. 4 pts in 2 min = 2× qualifies; 5 pts in 3 min = 1.67× does not). Select Compared (2nd-named) patients of qualifying charts.`;
     },
     evaluate(graph) {
       const out = [];
@@ -1308,7 +1308,7 @@ export const REASONING_ENGINES = {
       const nonQual = graph.records.filter((r) => r.weight < 2 * r.minutes).sort((a, b) => b.weight - a.weight);
       const desc = qual.map((r) => `${r.label} (+${r.weight} / ${r.minutes}m)`).join(', ');
       return {
-        proof: `Records meeting Weight ≥ 2 × Minutes are ${desc}, yielding ${formatNameList(targets)}.`,
+        proof: `Records meeting Acuity ≥ 2 × Minutes are ${desc}, yielding ${formatNameList(targets)}.`,
         decisiveChannels: qual.map((r) => r.channelId),
         rival: buildRival(targets, nonQual.flatMap((r) => graph.targetsOf(r.channelId)), (id) => {
           const r = nonQual.find((rec) => graph.targetsOf(rec.channelId).includes(id));
@@ -1326,10 +1326,10 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Time-budget call: minutes are scarce—find the single record(s) with the HIGHEST Severity-per-Minute rate (Weight ÷ Min) and attend to their right-side patients first.`;
+      return `Time-budget call: minutes are scarce—find the single record(s) with the HIGHEST Acuity-per-Minute rate (pts ÷ min) and attend to their Compared (2nd-named) patients first.`;
     },
     detail() {
-      return `Divide Weight by Minutes for each row (e.g. +5 in 1m = 5.0/min beats +6 in 2m = 3.0/min). Act on the highest-yield record(s).`;
+      return `Divide Acuity by Minutes for each chart (e.g. +5 in 1m = 5.0/min beats +6 in 2m = 3.0/min). Act on the highest-yield record(s).`;
     },
     evaluate(graph) {
       const rates = graph.records.map((r) => ({ rec: r, rate: r.weight / r.minutes }));
@@ -1372,10 +1372,10 @@ export const REASONING_ENGINES = {
       return { minGain: 2 };
     },
     order({ minGain }) {
-      return `Net benefit call: compute Net Gain = Weight − Minutes for every row. Intervene for right-side patients in every record with Net Gain ≥ +${minGain}.`;
+      return `Net benefit call: compute Net Clinical Gain = Acuity pts − Procedure min for every chart. Intervene for Compared (2nd-named) patients in every record with Net Gain ≥ +${minGain}.`;
     },
     detail({ minGain }) {
-      return `Subtract procedure Minutes from Severity Weight on each row; select right-side patients where (Weight − Min) ≥ +${minGain}.`;
+      return `Subtract procedure Minutes from Severity Acuity on each chart; select Compared (2nd-named) patients where (Acuity − Min) ≥ +${minGain}.`;
     },
     evaluate(graph, { minGain }) {
       return uniqueSorted(
@@ -1390,7 +1390,7 @@ export const REASONING_ENGINES = {
         .filter((r) => r.weight - r.minutes < minGain)
         .sort((a, b) => (b.weight - b.minutes) - (a.weight - a.minutes));
       return {
-        proof: `Records achieving Net Gain (Weight − Min) ≥ +${minGain}: ${qual.map((r) => `${r.label} (+${r.weight} − ${r.minutes}m = +${r.weight - r.minutes})`).join(', ')}.`,
+        proof: `Records achieving Net Gain (Acuity − Min) ≥ +${minGain}: ${qual.map((r) => `${r.label} (+${r.weight} − ${r.minutes}m = +${r.weight - r.minutes})`).join(', ')}.`,
         decisiveChannels: qual.map((r) => r.channelId),
         rival: buildRival(targets, nonQual.flatMap((r) => graph.targetsOf(r.channelId)), (id) => {
           const r = nonQual.find((rec) => graph.targetsOf(rec.channelId).includes(id));
@@ -1420,10 +1420,10 @@ export const REASONING_ENGINES = {
       return { threshold: 6 };
     },
     order({ threshold }) {
-      return `Combined exposure check: for each patient, multiply their number of right-side flags by the HIGHEST Weight among those flags. Intervene if total ≥ ${threshold}.`;
+      return `Combined exposure check: for each patient, multiply their number of Compared (2nd-named) flags by the HIGHEST Acuity score among those flags. Intervene if total ≥ ${threshold}.`;
     },
     detail({ threshold }) {
-      return `Count how many right-side flags a patient has, multiply by their single heaviest Weight (e.g. 2 flags × max +5 = 10), and act if ≥ ${threshold}.`;
+      return `Count how many Compared (2nd-named) flags a patient has, multiply by their single heaviest Acuity (e.g. 2 flags × max +5 = 10), and act if ≥ ${threshold}.`;
     },
     evaluate(graph, { threshold }) {
       return uniqueSorted(
@@ -1447,14 +1447,14 @@ export const REASONING_ENGINES = {
         (a, b) => info[b].risk - info[a].risk
       );
       return {
-        proof: `Risk (flags × max Weight) ≥ ${threshold}: ${targets.map((id) => `${pName(id)} (${info[id].freq}×${info[id].maxW}=${info[id].risk})`).join(', ')}.`,
+        proof: `Risk (flags × max Acuity) ≥ ${threshold}: ${targets.map((id) => `${pName(id)} (${info[id].freq}×${info[id].maxW}=${info[id].risk})`).join(', ')}.`,
         decisiveChannels: CHANNEL_IDS.slice(),
         rival: buildRival(targets, below, (id) => `${pName(id)} has Risk ${info[id].freq} × ${info[id].maxW} = ${info[id].risk}, below threshold ${threshold}.`),
       };
     },
   },
 
-  // 35. Mathematical Signed Net Balance (+Right Weight - Left Weight >= threshold)
+  // 35. Mathematical Signed Net Balance (+Right Acuity - Left Acuity >= threshold)
   'net-balance-math': {
     usesWeights: true,
     usesMinutes: false,
@@ -1473,10 +1473,10 @@ export const REASONING_ENGINES = {
       return { threshold: 5 };
     },
     order({ threshold }) {
-      return `Net severity balance: add (+Weight) for each RIGHT-side appearance and subtract (−Weight) for each LEFT-side appearance. Select everyone with Net Balance ≥ +${threshold}.`;
+      return `Net severity balance: add (+Acuity pts) for each Compared (2nd-named) appearance and subtract (−Acuity pts) for each Lead (1st-named) appearance. Select everyone with Net Balance ≥ +${threshold}.`;
     },
     detail({ threshold }) {
-      return `Compute Net = (sum of right-side Weights) − (sum of left-side Weights) per patient; select everyone reaching ≥ +${threshold}.`;
+      return `Compute Net = (sum of Compared (2nd-named) Acuity scores) − (sum of Lead (1st-named) Acuity scores) per patient; select everyone reaching ≥ +${threshold}.`;
     },
     evaluate(graph, { threshold }) {
       return uniqueSorted(
@@ -1504,7 +1504,7 @@ export const REASONING_ENGINES = {
     },
   },
 
-  // 36. Statistical Distribution Peak (Highest Cumulative Right-Side Weight Across Entire Ward)
+  // 36. Statistical Distribution Peak (Highest Cumulative Right-Side Acuity Across Entire Ward)
   'statistical-distribution-peak': {
     usesWeights: true,
     usesMinutes: false,
@@ -1512,10 +1512,10 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Peak acuity check: sum each patient's total RIGHT-side Weight across the whole ward and select ONLY the patient(s) tied for the MAXIMUM total.`;
+      return `Peak acuity check: sum each patient's total Compared (2nd-named) Acuity across the whole ward and select ONLY the patient(s) tied for the MAXIMUM total.`;
     },
     detail() {
-      return `Compare cumulative right-side Weights across the ward—act on the patient(s) tied for the highest total.`;
+      return `Compare cumulative Compared (2nd-named) Acuity scores across the ward—act on the patient(s) tied for the highest total.`;
     },
     evaluate(graph) {
       const totals = PATIENT_IDS.map((id) => ({
@@ -1535,7 +1535,7 @@ export const REASONING_ENGINES = {
       const top = totals[0].sum;
       const below = totals.filter((t) => t.sum < top).map((t) => t.id);
       return {
-        proof: `Ward mean right-side weight is ${mean}; the distribution peak is +${top}, held by ${formatNameList(targets)}.`,
+        proof: `Ward mean Compared (2nd-named) Acuity is ${mean}; the distribution peak is +${top}, held by ${formatNameList(targets)}.`,
         decisiveChannels: CHANNEL_IDS.slice(),
         rival: buildRival(targets, below, (id) => {
           const val = totals.find((t) => t.id === id)?.sum || 0;
@@ -1553,10 +1553,10 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Bedside proximity check: check the 5×2 Trauma Monitor above! Find every link (A → B) whose two patients occupy ADJACENT bays (next-door horizontally OR directly across the aisle, e.g. Bay 1↔6), and select the receiving patient B.`;
+      return `Bedside proximity check: check the Trauma Ward Bay Map on the left! Find every clinical comparison whose two patients occupy ADJACENT bays (next-door vertically OR directly across the corridor, e.g. Bay 1↔6), and select the Compared (2nd-named) patient.`;
     },
     detail() {
-      return `Bays 1–5 sit on Top Row; Bays 6–10 sit directly below (1↔6, 2↔7, 3↔8, 4↔9, 5↔10). Select B whenever A and B touch on the 5×2 floor grid.`;
+      return `Resus Bays 1–5 line the left column; Intake Bays 6–10 face them across the hall (1↔6, 2↔7, 3↔8, 4↔9, 5↔10). Select the 2nd-named patient whenever the pair touch on the ward floor.`;
     },
     evaluate(graph) {
       const areAdjacent = (idA, idB) => {
@@ -1609,10 +1609,10 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Family briefing gap: families briefed on the right side during 01:00–03:00 still hold an OUTDATED picture UNLESS they received a follow-up update anywhere in 05:00–06:00. Select who still needs re-briefing.`;
+      return `Family briefing gap: families briefed listed 2nd (Compared) during 01:00–03:00 still hold an OUTDATED picture UNLESS they received a follow-up update anywhere in 05:00–06:00. Select who still needs re-briefing.`;
     },
     detail() {
-      return `Gather right-side patients from 01:00, 02:00, and 03:00, then remove anyone who appears on either side of 05:00 or 06:00.`;
+      return `Gather Compared (2nd-named) patients from 01:00, 02:00, and 03:00, then remove anyone who appears on either side of 05:00 or 06:00.`;
     },
     evaluate(graph) {
       const earlyBriefed = uniqueSorted(
@@ -1655,10 +1655,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { overrideCh: 'triage' };
     },
     order({ overrideCh }, sc) {
-      return `Escalation & consent check: high-severity records (Weight ≥ +4) flag right-side patients for escalation, EXCEPT wishes logged in ${chLabel(sc, overrideCh)} override escalation. Select who should be escalated.`;
+      return `Escalation & consent check: high-severity records (Acuity ≥ 4 pts) flag Compared (2nd-named) patients for escalation, EXCEPT wishes logged in ${chLabel(sc, overrideCh)} override escalation. Select who should be escalated.`;
     },
     detail({ overrideCh }, sc) {
-      return `Gather right-side patients from records weighted +4, +5, or +6, then honor autonomy by removing anyone named in ${chLabel(sc, overrideCh)}.`;
+      return `Gather Compared (2nd-named) patients from records rated 4, 5, or 6 pts, then honor autonomy by removing anyone named in ${chLabel(sc, overrideCh)}.`;
     },
     evaluate(graph, { overrideCh }) {
       const restricted = new Set(graph.patientsIn(overrideCh));
@@ -1676,9 +1676,9 @@ export const REASONING_ENGINES = {
       );
       const overridden = allUrgent.filter((id) => restricted.has(id));
       return {
-        proof: `High-acuity (+4..+6) patients (${formatNameList(allUrgent)}) honoring ${chLabel(sc, overrideCh)} autonomy overrides leave ${formatNameList(targets)}.`,
+        proof: `High-acuity (4–6 pts) patients (${formatNameList(allUrgent)}) honoring ${chLabel(sc, overrideCh)} autonomy overrides leave ${formatNameList(targets)}.`,
         decisiveChannels: [overrideCh, ...graph.records.filter((r) => r.weight >= 4).map((r) => r.channelId)],
-        rival: buildRival(targets, overridden, (id) => `${pName(id)} had Weight ≥ +4 urgency, but ${chLabel(sc, overrideCh)} autonomy directive restricts escalation.`),
+        rival: buildRival(targets, overridden, (id) => `${pName(id)} had Acuity ≥ 4 pts urgency, but ${chLabel(sc, overrideCh)} autonomy directive restricts escalation.`),
       };
     },
   },
@@ -1696,10 +1696,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { chA: 'triage' };
     },
     order({ chA }, sc) {
-      return `Role-switch check: select every patient who acts as the SUBJECT (left side) in ${chLabel(sc, chA)} AND appears as the OBJECT (right side) in at least one OTHER record.`;
+      return `Role-switch check: select every patient who acts as the Lead patient (1st-named) in ${chLabel(sc, chA)} AND appears as the Compared patient (2nd-named) in at least one OTHER record.`;
     },
     detail({ chA }, sc) {
-      return `Read exact sentence roles: find who is the active left-side subject in ${chLabel(sc, chA)}, then verify they receive an action (right side) in a different row.`;
+      return `Read exact sentence roles: find who is the Lead (1st-named) patient in ${chLabel(sc, chA)}, then verify they appear as Compared (2nd-named) in a different chart.`;
     },
     evaluate(graph, { chA }) {
       return graph.sourcesOf(chA).filter((id) => graph.inEdges(id).some((e) => e.channelId !== chA));
@@ -1708,11 +1708,11 @@ export const REASONING_ENGINES = {
       const leftA = graph.sourcesOf(chA);
       const nonShifters = leftA.filter((id) => !targets.includes(id));
       return {
-        proof: `Among left-side subjects of ${chLabel(sc, chA)} (${formatNameList(leftA)}), only ${formatNameList(targets)} also appear as right-side objects in another record.`,
+        proof: `Among Lead (1st-named) subjects of ${chLabel(sc, chA)} (${formatNameList(leftA)}), only ${formatNameList(targets)} also appear as Compared (2nd-named) objects in another record.`,
         decisiveChannels: [chA],
         rival: buildRival(targets, nonShifters.length ? nonShifters : graph.targetsOf(chA), (id) =>
           leftA.includes(id)
-            ? `${pName(id)} is a subject in ${chLabel(sc, chA)} but never appears as a right-side object in any other record.`
+            ? `${pName(id)} is a subject in ${chLabel(sc, chA)} but never appears as a Compared (2nd-named) object in any other record.`
             : `${pName(id)} is on the object (right) side of ${chLabel(sc, chA)}, not the subject (left) side.`
         ),
       };
@@ -1740,10 +1740,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { siteIdx: 0, exclCh: 'consult' };
     },
     order({ siteIdx, exclCh }, sc) {
-      return `Three-rule filter: select right-side patients satisfying ALL THREE rules at once — (1) Unit is ${sc.sites[siteIdx]}, (2) logged at 02:00 or later, AND (3) NOT named anywhere in ${chLabel(sc, exclCh)}.`;
+      return `Three-rule filter: select Compared (2nd-named) patients satisfying ALL THREE rules at once — (1) Unit is ${sc.sites[siteIdx]}, (2) logged at 02:00 or later, AND (3) NOT named anywhere in ${chLabel(sc, exclCh)}.`;
     },
     detail({ siteIdx, exclCh }, sc) {
-      return `Apply all 3 conditions together: ${sc.sites[siteIdx]} rows with Time ≥ 02:00 (right side), excluding anyone appearing in ${chLabel(sc, exclCh)}.`;
+      return `Apply all 3 conditions together: ${sc.sites[siteIdx]} charts with Time ≥ 02:00 (listed 2nd), excluding anyone appearing in ${chLabel(sc, exclCh)}.`;
     },
     evaluate(graph, { siteIdx, exclCh }) {
       const excl = new Set(graph.patientsIn(exclCh));
@@ -1781,10 +1781,10 @@ export const REASONING_ENGINES = {
       return {};
     },
     order(_params, sc) {
-      return `Early-shift trend: observe the first three records (01:00, 02:00, 03:00) to see which Unit (${sc.sites[0]} or ${sc.sites[1]}) dominates the early shift (2 or 3 of 3). Then select right-side patients of the LATEST record belonging to that dominant Unit.`;
+      return `Early-shift trend: observe the first three records (01:00, 02:00, 03:00) to see which Unit (${sc.sites[0]} or ${sc.sites[1]}) dominates the early shift (2 or 3 of 3). Then select Compared (2nd-named) patients of the LATEST record belonging to that dominant Unit.`;
     },
     detail(_params, sc) {
-      return `Count ${sc.sites[0]} vs ${sc.sites[1]} in 01:00–03:00 (guaranteed strict majority), then pick right-side patients of that dominant Unit's latest timestamped row.`;
+      return `Count ${sc.sites[0]} vs ${sc.sites[1]} in 01:00–03:00 (guaranteed strict majority), then pick Compared (2nd-named) patients of that dominant Unit's latest timestamped chart.`;
     },
     evaluate(graph) {
       const early = graph.records.filter((r) => r.timeRank <= 2);
@@ -1832,10 +1832,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { anchor: PATIENT_IDS[0] };
     },
     order({ anchor }) {
-      return `Contact sweep around ${pName(anchor)}: scan ALL 6 records broadly and select EVERY patient directly connected to ${pName(anchor)} (on either the left or right side of a link with ${pName(anchor)}).`;
+      return `Contact sweep around ${pName(anchor)}: scan ALL 6 records broadly and select EVERY patient directly connected to ${pName(anchor)} (in any clinical chart alongside ${pName(anchor)}).`;
     },
     detail({ anchor }) {
-      return `Scan every row mentioning ${pName(anchor)}—surface every distinct clinical partner linked directly to ${pName(anchor)}.`;
+      return `Scan every chart mentioning ${pName(anchor)}—surface every distinct clinical partner linked directly to ${pName(anchor)}.`;
     },
     evaluate(graph, { anchor }) {
       return uniqueSorted([
@@ -1859,7 +1859,7 @@ export const REASONING_ENGINES = {
     },
   },
 
-  // 44. Combinatorial Channel-Pair Weight Sum (Appears in >= 2 records whose combined Weights >= threshold)
+  // 44. Combinatorial Channel-Pair Acuity Sum (Appears in >= 2 records whose combined Acuity scores >= threshold)
   'combinatorial-budget-pair': {
     usesWeights: true,
     usesMinutes: false,
@@ -1881,7 +1881,7 @@ export const REASONING_ENGINES = {
       return { threshold: 9 };
     },
     order({ threshold }) {
-      return `Combined record check: find every patient who appears in TWO different records whose combined Weights add up to at least ${threshold} (e.g. +6 and +4 = 10).`;
+      return `Combined record check: find every patient who appears in TWO different records whose combined Acuity scores add up to at least ${threshold} (e.g. +6 and +4 = 10).`;
     },
     detail({ threshold }) {
       return `Check combinations of two records containing the same patient (either side); select anyone with a pair summing to ≥ ${threshold}.`;
@@ -1912,7 +1912,7 @@ export const REASONING_ENGINES = {
         (a, b) => info[b].top2 - info[a].top2
       );
       return {
-        proof: `Patients with a 2-record Weight combination ≥ ${threshold}: ${targets.map((id) => `${pName(id)} (+${info[id].w0} + +${info[id].w1} = ${info[id].top2})`).join(', ')}.`,
+        proof: `Patients with a 2-record Acuity combination ≥ ${threshold}: ${targets.map((id) => `${pName(id)} (+${info[id].w0} + +${info[id].w1} = ${info[id].top2})`).join(', ')}.`,
         decisiveChannels: CHANNEL_IDS.slice(),
         rival: buildRival(targets, below, (id) => `${pName(id)}'s heaviest pair of records sums to ${info[id].top2} (+${info[id].w0} + +${info[id].w1}), below ${threshold}.`),
       };
@@ -1927,10 +1927,10 @@ export const REASONING_ENGINES = {
       return { minWeight: 3 };
     },
     order({ minWeight }) {
-      return `Unrepresented patient priority: select every patient flagged with serious need (right side of a Weight ≥ +${minWeight} record) who NEVER appears on the initiating (left) side of ANY record.`;
+      return `Unrepresented patient priority: select every patient flagged with serious need (listed 2nd in an Acuity ≥ +${minWeight} record) who NEVER appears listed 1st (Lead) of ANY record.`;
     },
     detail({ minWeight }) {
-      return `Check right-side patients in records weighted +${minWeight}..+6, then exclude anyone who has at least one left-side entry anywhere on the board.`;
+      return `Check Compared (2nd-named) patients in records weighted +${minWeight}..+6, then exclude anyone who has at least one Lead (1st-named) entry anywhere on the board.`;
     },
     evaluate(graph, { minWeight }) {
       const highNeed = uniqueSorted(
@@ -1948,9 +1948,9 @@ export const REASONING_ENGINES = {
       );
       const selfInitiating = highNeed.filter((id) => graph.outEdges(id).length > 0);
       return {
-        proof: `Among serious-need patients (Weight ≥ +${minWeight}), ${formatNameList(targets)} have zero initiating (left-side) presence and require moral priority.`,
+        proof: `Among serious-need patients (Acuity ≥ +${minWeight}), ${formatNameList(targets)} have zero Lead (1st-named) presence and require moral priority.`,
         decisiveChannels: CHANNEL_IDS.slice(),
-        rival: buildRival(targets, selfInitiating, (id) => `${pName(id)} is flagged at Weight ≥ +${minWeight}, but also appears on the initiating left side elsewhere.`),
+        rival: buildRival(targets, selfInitiating, (id) => `${pName(id)} is flagged at Acuity ≥ +${minWeight}, but also appears on the initiating left side elsewhere.`),
       };
     },
   },
@@ -1963,10 +1963,10 @@ export const REASONING_ENGINES = {
       return {};
     },
     order() {
-      return `Rapid bedside check: glance ONLY at the fastest 1m record first. IF its Weight is ≥ +3, act on its right-side patients immediately; OTHERWISE jump straight to the heaviest +6 record (right side).`;
+      return `Rapid bedside check: glance ONLY at the fastest 1 min chart first. IF its Acuity is ≥ 3 pts, act on its Compared (2nd-named) patients immediately; OTHERWISE jump straight to the highest-acuity 6 pt chart (listed 2nd).`;
     },
     detail() {
-      return `Don't sum the whole board: check the 1m row's Weight first (≥ +3 = quick win; < +3 = default to the +6 row's right side).`;
+      return `Don't sum the whole board: check the 1 min chart's Acuity score first (≥ 3 pts = quick win; < 3 pts = default to the 6 pt chart's Compared (2nd-named) patients).`;
     },
     evaluate(graph) {
       const fastest = graph.records.find((r) => r.minutes === 1);
@@ -1982,7 +1982,7 @@ export const REASONING_ENGINES = {
       const chosen = quickWin ? fastest : heaviest;
       const other = quickWin ? heaviest : fastest;
       return {
-        proof: `Fastest 1m record ${fastest.label} has Weight +${fastest.weight} (${quickWin ? '≥ +3 quick win' : '< +3, fallback to heaviest +6'}), selecting ${chosen.label}: ${formatNameList(targets)}.`,
+        proof: `Fastest 1 min chart ${fastest.label} has Acuity +${fastest.weight} (${quickWin ? '≥ 3 pts quick win' : '< 3 pts, fallback to heaviest +6'}), selecting ${chosen.label}: ${formatNameList(targets)}.`,
         decisiveChannels: [fastest.channelId, heaviest.channelId],
         rival: buildRival(targets, graph.targetsOf(other.channelId), (id) =>
           `${pName(id)} belongs to ${other.label}, the branch skipped by the fast-and-frugal heuristic.`
@@ -2011,10 +2011,10 @@ export const REASONING_ENGINES = {
       return valid.length ? valid[Math.floor(rng() * valid.length)] : { seed: PATIENT_IDS[0] };
     },
     order({ seed }) {
-      return `Downstream ripple from ${pName(seed)}: trace ${pName(seed)} → M (step 1), then follow M → B across the chart. Ignore ${pName(seed)} and M—intervene for the 2-step downstream patients B.`;
+      return `Downstream ripple from ${pName(seed)}: start from ${pName(seed)} (1st-named) to their Compared partner M, then find charts where M is listed 1st—ignore ${pName(seed)} and M, and treat the 2nd-step Compared patient(s).`;
     },
     detail({ seed }) {
-      return `Find everyone ${pName(seed)} points to (step 1: M), then select NEW patients B whom any M points to (excluding ${pName(seed)} and M themselves).`;
+      return `Find everyone ${pName(seed)} directly precedes (step 1), then select NEW patients whom those middle patients directly precede (excluding ${pName(seed)} and the step-1 patients).`;
     },
     evaluate(graph, { seed }) {
       const firstOrder = new Set(graph.outEdges(seed).map((e) => e.to));
@@ -2050,7 +2050,7 @@ export const REASONING_ENGINES = {
       return {};
     },
     order(_params, sc) {
-      return `Cross-unit role reversal: compare ${sc.sites[0]} and ${sc.sites[1]} — select every patient who is on the LEFT side in one unit AND on the RIGHT side in the OTHER unit.`;
+      return `Cross-unit role reversal: compare ${sc.sites[0]} and ${sc.sites[1]} — select every patient who is listed 1st (Lead) in one unit AND listed 2nd (Compared) in the OTHER unit.`;
     },
     detail(_params, sc) {
       return `Find patients pulled in opposite directions across units (left in ${sc.sites[0]} + right in ${sc.sites[1]}, OR right in ${sc.sites[0]} + left in ${sc.sites[1]}).`;
@@ -2083,7 +2083,7 @@ export const REASONING_ENGINES = {
     },
   },
 
-  // 49. Integrative Capstone (#80 Integrative reasoning — orchestrate Meta-Unit + Quantitative Weight + Eliminative Exclusion in one call)
+  // 49. Integrative Capstone (#80 Integrative reasoning — orchestrate Meta-Unit + Quantitative Acuity + Eliminative Exclusion in one call)
   'integrative-capstone': {
     usesWeights: true,
     usesMinutes: false,
@@ -2091,10 +2091,10 @@ export const REASONING_ENGINES = {
       return { minWeight: 3 };
     },
     order({ minWeight }) {
-      return `Full-chart call: (1) Check which Unit holds 01:00; (2) inside THAT Unit, gather right-side patients from records with Weight ≥ +${minWeight}; (3) EXCLUDE anyone named anywhere in the latest 06:00 record.`;
+      return `Full-chart call: (1) Check which Unit holds 01:00; (2) inside THAT Unit, gather Compared (2nd-named) patients from records with Acuity ≥ +${minWeight}; (3) EXCLUDE anyone named anywhere in the latest 06:00 record.`;
     },
     detail({ minWeight }) {
-      return `Combine 3 checks at once: scope to 01:00's Unit, keep Weight ≥ +${minWeight} right-side rows, and rule out anyone appearing in 06:00.`;
+      return `Combine 3 checks at once: scope to 01:00's Unit, keep Acuity ≥ +${minWeight} Compared (2nd-named) charts, and rule out anyone appearing in 06:00.`;
     },
     evaluate(graph, { minWeight }) {
       const first = graph.records.find((r) => r.timeRank === 0);
@@ -2124,11 +2124,11 @@ export const REASONING_ENGINES = {
           .flatMap((r) => graph.targetsOf(r.channelId))
       );
       return {
-        proof: `01:00 sets context to ${first.site}; Weight ≥ +${minWeight} rows give ${formatNameList(pool)}, and ruling out 06:00 (${last.label}) leaves ${formatNameList(targets)}.`,
+        proof: `01:00 sets context to ${first.site}; Acuity ≥ +${minWeight} charts give ${formatNameList(pool)}, and ruling out 06:00 (${last.label}) leaves ${formatNameList(targets)}.`,
         decisiveChannels: CHANNEL_IDS.slice(),
         rival: buildRival(targets, ruledOut.length ? ruledOut : wrongUnit, (id) =>
           ruledOut.includes(id)
-            ? `${pName(id)} qualified in ${first.site} with Weight ≥ +${minWeight}, then was excluded by 06:00 (${last.label}).`
+            ? `${pName(id)} qualified in ${first.site} with Acuity ≥ +${minWeight}, then was excluded by 06:00 (${last.label}).`
             : `${pName(id)} belongs to the opposite unit from 01:00 (${first.site}).`
         ),
       };

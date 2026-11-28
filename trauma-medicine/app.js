@@ -95,6 +95,8 @@ const state = {
   trialStartTs: 0,
   selectedIds: [],
   ruledOutIds: new Set(),
+  hypothesisFlips: new Set(),
+  chartSortMode: 'default', // 'default' | 'time' | 'wing'
   highlightedPatientId: null,
   pinnedHighlightId: null,
   debrief: null,
@@ -132,10 +134,10 @@ function updateSpeedDisplays() {
   dom.paceValue.textContent = label;
 
   const tierRank = activePreviewTierRank();
-  const tierFactor = 1 - (tierRank - 1) * 0.045;
-  const baseSec = Math.max(24, 42 * tierFactor);
-  const firstCrashSec = Math.max(4, Math.round(baseSec / pace));
-  dom.titleSpeedCrash.textContent = `First crash in ${firstCrashSec} s`;
+  const tierScale = tierRank >= 4 ? 1.42 : 1 - (tierRank - 1) * 0.04;
+  const baseSec = Math.max(20, Math.round(24 * tierScale));
+  const firstCrashSec = Math.max(6, Math.round(baseSec / pace));
+  dom.titleSpeedCrash.textContent = `Earliest bay ${firstCrashSec} s`;
 
   const t = Math.max(0, Math.min(1, (pace - 0.25) / (3.0 - 0.25)));
   const startDeg = 135;
@@ -357,18 +359,20 @@ function startShift({ pinnedReasoningType = null } = {}) {
   state.currentTrial = null;
   state.selectedIds = [];
   state.ruledOutIds.clear();
+  state.hypothesisFlips.clear();
   state.highlightedPatientId = null;
   state.pinnedHighlightId = null;
   state.debrief = null;
   state.nbackFeedback = null;
 
   const isNback = state.setupMode === 'nback';
+  dom.body.dataset.mode = isNback ? 'nback' : 'standard';
   dom.wardWrap.hidden = isNback;
   if (dom.paceControl) dom.paceControl.hidden = isNback;
 
   setScreen('playing');
   scene.setPaceMultiplier(state.pace);
-  scene.resize();
+  requestAnimationFrame(() => scene.resize());
 
   if (isNback) {
     advanceNBackTrial();
@@ -388,6 +392,7 @@ function advanceStandardTrial() {
   state.currentTrial = state.scheduler.nextTrial(tierId);
   state.selectedIds = [];
   state.ruledOutIds.clear();
+  state.hypothesisFlips.clear();
   state.highlightedPatientId = null;
   state.pinnedHighlightId = null;
   state.debrief = null;
@@ -414,6 +419,36 @@ function renderCurrentDossier() {
     holdDebrief: state.holdDebrief,
     highlightedPatientId: state.highlightedPatientId,
     ruledOutIds: state.ruledOutIds,
+    chartSortMode: state.chartSortMode,
+    hypothesisFlips: state.hypothesisFlips,
+    onChangeSortMode: (mode) => {
+      if (state.chartSortMode === mode) return;
+      state.chartSortMode = mode;
+      audio.playMark(false);
+      renderCurrentDossier();
+    },
+    onToggleHypothesisFlip: (idx) => {
+      if (state.debrief) return;
+      if (state.hypothesisFlips.has(idx)) {
+        state.hypothesisFlips.delete(idx);
+        audio.playMark(false);
+      } else {
+        state.hypothesisFlips.add(idx);
+        audio.playMark(true);
+      }
+      renderCurrentDossier();
+    },
+    onClearMarks: () => {
+      state.ruledOutIds.forEach((pid) => scene.setRuledOut(pid, false));
+      state.ruledOutIds.clear();
+      state.hypothesisFlips.clear();
+      state.pinnedHighlightId = null;
+      state.highlightedPatientId = null;
+      scene.setHighlightedPatient(null);
+      audio.playMark(false);
+      renderBayButtons();
+      renderCurrentDossier();
+    },
     onNextTrial: () => advanceStandardTrial(),
     onHoldToggle: () => {
       state.holdDebrief = !state.holdDebrief;
@@ -463,6 +498,7 @@ function finishStandardTrial({ cleared, reason, wrongId }) {
   });
 
   state.ruledOutIds.clear();
+  state.hypothesisFlips.clear();
   state.pinnedHighlightId = null;
   state.highlightedPatientId = null;
   scene.setHighlightedPatient(null);
